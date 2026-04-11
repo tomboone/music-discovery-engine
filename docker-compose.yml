@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - UV_PROJECT_ENVIRONMENT=/opt/venv
+      - APP_DB_URL=postgresql+psycopg://root:root@tbc_postgresql_db:5432/music_discovery
+      - MUSICBRAINZ_DB_URL=postgresql+psycopg://root:root@tbc_postgresql_db:5432/musicbrainz
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.music-discovery-api.rule=Host(`music-discovery-api.localhost`)"
+      - "traefik.http.routers.music-discovery-api.entrypoints=websecure"
+      - "traefik.http.routers.music-discovery-api.tls=true"
+      - "traefik.http.services.music-discovery-api.loadbalancer.server.port=8000"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

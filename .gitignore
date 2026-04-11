@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Claude Code
+.claude/settings.local.json
+
+# Environment
+.env
+
+# pytest
+.pytest_cache/
+
+# Docs (design specs and plans — not ready for version control)
+docs/
+
+# uv
+.python-version
