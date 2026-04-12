@@ -69,6 +69,15 @@ l_artist_recording_table = Table(
     Column("link", Integer, ForeignKey("musicbrainz.link.id")),
 )
 
+l_artist_artist_table = Table(
+    "l_artist_artist",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("entity0", Integer, ForeignKey("musicbrainz.artist.id")),
+    Column("entity1", Integer, ForeignKey("musicbrainz.artist.id")),
+    Column("link", Integer, ForeignKey("musicbrainz.link.id")),
+)
+
 tag_table = Table(
     "tag",
     metadata,
@@ -180,6 +189,13 @@ def seeded_session(mb_session):
     )
     s.execute(
         l_artist_recording_table.insert().values(id=9, entity0=10, entity1=6, link=1)
+    )
+
+    # "member of band" link type + link + relationship: Artist Y is member of Seed
+    s.execute(link_type_table.insert().values(id=3, name="member of band"))
+    s.execute(link_table.insert().values(id=3, link_type=3))
+    s.execute(
+        l_artist_artist_table.insert().values(id=1, entity0=200, entity1=1, link=3)
     )
 
     # Tags
@@ -358,3 +374,25 @@ class TestGetArtistTags:
         repo = RecommendationRepository()
         tags = repo.get_artist_tags(seeded_session, [])
         assert tags == {}
+
+
+class TestGetObviousRelatedMbids:
+    def test_returns_band_members(self, seeded_session):
+        repo = RecommendationRepository()
+        # Artist Y (id=200) is "member of band" Seed (id=1)
+        related = repo.get_obvious_related_mbids(seeded_session, uuid.UUID(SEED_GID))
+        assert ARTIST_Y_GID in related
+
+    def test_does_not_return_unrelated(self, seeded_session):
+        repo = RecommendationRepository()
+        related = repo.get_obvious_related_mbids(seeded_session, uuid.UUID(SEED_GID))
+        # Artist X and Artist Z have no "member of band" relationship with Seed
+        assert ARTIST_X_GID not in related
+        assert ARTIST_Z_GID not in related
+
+    def test_empty_for_no_relationships(self, seeded_session):
+        repo = RecommendationRepository()
+        related = repo.get_obvious_related_mbids(
+            seeded_session, uuid.UUID(ARTIST_X_GID)
+        )
+        assert related == set()

@@ -58,6 +58,12 @@ class RecommendationService:
             limit=limit + 50,
         )
 
+        # Filter out obviously related artists (band members, alter egos, etc.)
+        obvious_mbids = self._repository.get_obvious_related_mbids(
+            mb_session, seed_mbid
+        )
+        raw_results = [r for r in raw_results if r["artist_mbid"] not in obvious_mbids]
+
         # Batch-fetch tags for seed + all candidates
         candidate_mbids = [r["artist_mbid"] for r in raw_results]
         all_mbids = [str(seed_mbid)] + candidate_mbids

@@ -284,6 +284,70 @@ class RecommendationRepository:
             return None
         return {"name": row.name, "mbid": row.gid}
 
+    OBVIOUS_RELATIONSHIP_TYPES = [
+        "member of band",
+        "is person",
+        "subgroup",
+        "founder",
+    ]
+
+    def get_obvious_related_mbids(
+        self, session: Session, seed_mbid: uuid.UUID
+    ) -> set[str]:
+        """Return MBIDs of artists obviously related to the seed (band members,
+        alter egos, subgroups, founders). These should be excluded from
+        recommendations since fans of the seed will already know them."""
+        dialect = session.bind.dialect.name if session.bind else "postgresql"
+
+        if dialect == "sqlite":
+            placeholders = ", ".join(
+                f":rt{i}" for i in range(len(self.OBVIOUS_RELATIONSHIP_TYPES))
+            )
+            sql = text(f"""
+                SELECT DISTINCT
+                    CASE
+                        WHEN a1.gid = :seed_mbid THEN a2.gid
+                        ELSE a1.gid
+                    END AS related_mbid
+                FROM musicbrainz.l_artist_artist laa
+                JOIN musicbrainz.link l ON l.id = laa.link
+                JOIN musicbrainz.link_type lt ON lt.id = l.link_type
+                JOIN musicbrainz.artist a1 ON a1.id = laa.entity0
+                JOIN musicbrainz.artist a2 ON a2.id = laa.entity1
+                WHERE (a1.gid = :seed_mbid OR a2.gid = :seed_mbid)
+                  AND lt.name IN ({placeholders})
+            """)
+            params: dict = {
+                "seed_mbid": str(seed_mbid),
+                **{
+                    f"rt{i}": rt for i, rt in enumerate(self.OBVIOUS_RELATIONSHIP_TYPES)
+                },
+            }
+        else:
+            sql = text("""
+                SELECT DISTINCT
+                    CASE
+                        WHEN CAST(a1.gid AS text) = :seed_mbid
+                            THEN CAST(a2.gid AS text)
+                        ELSE CAST(a1.gid AS text)
+                    END AS related_mbid
+                FROM musicbrainz.l_artist_artist laa
+                JOIN musicbrainz.link l ON l.id = laa.link
+                JOIN musicbrainz.link_type lt ON lt.id = l.link_type
+                JOIN musicbrainz.artist a1 ON a1.id = laa.entity0
+                JOIN musicbrainz.artist a2 ON a2.id = laa.entity1
+                WHERE (CAST(a1.gid AS text) = :seed_mbid
+                    OR CAST(a2.gid AS text) = :seed_mbid)
+                  AND lt.name = ANY(:rel_types)
+            """)
+            params = {
+                "seed_mbid": str(seed_mbid),
+                "rel_types": self.OBVIOUS_RELATIONSHIP_TYPES,
+            }
+
+        rows = session.execute(sql, params).fetchall()
+        return {str(row[0]) for row in rows}
+
     def get_artist_tags(
         self, session: Session, artist_mbids: list[str]
     ) -> dict[str, dict[str, int]]:
