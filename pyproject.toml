@@ -36,6 +36,9 @@ select = [
     "B",     # flake8-bugbear
     "SIM",   # flake8-simplify
 ]
+ignore = [
+    "B008",  # function call in default arg — required by FastAPI Query()
+]
 
 [tool.pyright]
 pythonVersion = "3.14"

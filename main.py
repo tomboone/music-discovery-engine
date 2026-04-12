@@ -7,11 +7,20 @@ from sqlalchemy.engine import Engine
 
 from app.clients.lastfm import LastfmClient
 from app.config import Settings
-from app.database import create_app_db, get_app_engine, get_app_session, get_mb_engine
+from app.database import (
+    create_app_db,
+    get_app_engine,
+    get_app_session,
+    get_mb_engine,
+    get_mb_session,
+)
 from app.models.musicbrainz import reflect_mb_tables
 from app.repositories.lastfm import LastfmRepository
+from app.repositories.recommendations import RecommendationRepository
 from app.routers.lastfm import create_lastfm_router
+from app.routers.recommendations import create_recommendations_router
 from app.services.lastfm import LastfmService
+from app.services.recommendations import RecommendationService
 
 SEED_USER_ID = uuid.UUID("d4e5f6a7-b8c9-4d0e-a1f2-b3c4d5e6f7a8")
 
@@ -54,6 +63,25 @@ def _get_app_session():
 app.include_router(
     create_lastfm_router(
         lastfm_service, lastfm_client, SEED_USER_ID, get_session=_get_app_session
+    )
+)
+
+# Recommendations
+rec_repo = RecommendationRepository()
+rec_service = RecommendationService(repository=rec_repo)
+
+
+def _get_mb_session():
+    assert mb_engine is not None
+    yield from get_mb_session(mb_engine)
+
+
+app.include_router(
+    create_recommendations_router(
+        rec_service,
+        SEED_USER_ID,
+        get_app_session=_get_app_session,
+        get_mb_session=_get_mb_session,
     )
 )
 
