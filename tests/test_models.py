@@ -35,6 +35,6 @@ def test_user_email_required():
         session.add(user)
         try:
             session.commit()
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except Exception:
             session.rollback()

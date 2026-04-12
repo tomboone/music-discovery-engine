@@ -1,3 +1,4 @@
+import contextlib
 import uuid
 from collections.abc import Callable, Generator
 
@@ -13,16 +14,17 @@ def create_lastfm_router(
     service: LastfmService,
     client: LastfmClient,
     seed_user_id: uuid.UUID,
-    get_session: Callable[[], Generator[Session, None, None]] | None = None,
+    get_session: Callable[[], Generator[Session]] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
-    def _get_session() -> Generator[Session, None, None]:
+    def _get_session() -> Generator[Session]:
         if get_session:
             yield from get_session()
         else:
             from app.config import Settings
             from app.database import get_app_engine, get_app_session
+
             settings = Settings()
             engine = get_app_engine(settings)
             yield from get_app_session(engine)
@@ -42,10 +44,8 @@ def create_lastfm_router(
         except LastfmAuthError as e:
             return JSONResponse(status_code=401, content={"error": str(e)})
         finally:
-            try:
+            with contextlib.suppress(StopIteration):
                 next(gen)
-            except StopIteration:
-                pass
 
     @router.post("/lastfm/sync")
     async def sync():
@@ -59,10 +59,8 @@ def create_lastfm_router(
         except LastfmApiError as e:
             return JSONResponse(status_code=502, content={"error": str(e)})
         finally:
-            try:
+            with contextlib.suppress(StopIteration):
                 next(gen)
-            except StopIteration:
-                pass
 
     @router.get("/lastfm/status")
     async def status():
@@ -83,9 +81,7 @@ def create_lastfm_router(
                 }
             return {"linked": False}
         finally:
-            try:
+            with contextlib.suppress(StopIteration):
                 next(gen)
-            except StopIteration:
-                pass
 
     return router

@@ -1,6 +1,5 @@
 import hashlib
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -31,14 +30,25 @@ class TestGetAuthUrl:
 
 class TestSignature:
     def test_signature_generation(self, client):
-        params = {"method": "auth.getSession", "api_key": "test_api_key", "token": "abc"}
+        params = {
+            "method": "auth.getSession",
+            "api_key": "test_api_key",
+            "token": "abc",
+        }
         sig = client._build_signature(params)
-        expected_input = "api_keytest_api_keymethodauth.getSessiontokenabc" + "test_secret"
+        expected_input = (
+            "api_keytest_api_keymethodauth.getSessiontokenabc" + "test_secret"
+        )
         expected = hashlib.md5(expected_input.encode()).hexdigest()
         assert sig == expected
 
     def test_signature_excludes_format(self, client):
-        params = {"method": "auth.getSession", "api_key": "key", "token": "t", "format": "json"}
+        params = {
+            "method": "auth.getSession",
+            "api_key": "key",
+            "token": "t",
+            "format": "json",
+        }
         sig = client._build_signature(params)
         no_format = {"method": "auth.getSession", "api_key": "key", "token": "t"}
         sig_without = client._build_signature(no_format)
@@ -69,9 +79,11 @@ class TestExchangeToken:
             json={"error": 4, "message": "Unauthorized Token"},
             request=httpx.Request("GET", "https://example.com"),
         )
-        with patch.object(client._http, "get", return_value=mock_response):
-            with pytest.raises(LastfmAuthError, match="Unauthorized Token"):
-                client.exchange_token("bad_token")
+        with (
+            patch.object(client._http, "get", return_value=mock_response),
+            pytest.raises(LastfmAuthError, match="Unauthorized Token"),
+        ):
+            client.exchange_token("bad_token")
 
 
 class TestGetTopArtists:
@@ -116,8 +128,20 @@ class TestGetTopArtists:
             200,
             json={
                 "topartists": {
-                    "artist": [{"name": "Artist1", "playcount": "100", "mbid": "", "@attr": {"rank": "1"}}],
-                    "@attr": {"page": "1", "perPage": "1", "total": "2", "totalPages": "2"},
+                    "artist": [
+                        {
+                            "name": "Artist1",
+                            "playcount": "100",
+                            "mbid": "",
+                            "@attr": {"rank": "1"},
+                        }
+                    ],
+                    "@attr": {
+                        "page": "1",
+                        "perPage": "1",
+                        "total": "2",
+                        "totalPages": "2",
+                    },
                 }
             },
             request=httpx.Request("GET", "https://example.com"),
@@ -126,16 +150,30 @@ class TestGetTopArtists:
             200,
             json={
                 "topartists": {
-                    "artist": [{"name": "Artist2", "playcount": "50", "mbid": "", "@attr": {"rank": "2"}}],
-                    "@attr": {"page": "2", "perPage": "1", "total": "2", "totalPages": "2"},
+                    "artist": [
+                        {
+                            "name": "Artist2",
+                            "playcount": "50",
+                            "mbid": "",
+                            "@attr": {"rank": "2"},
+                        }
+                    ],
+                    "@attr": {
+                        "page": "2",
+                        "perPage": "1",
+                        "total": "2",
+                        "totalPages": "2",
+                    },
                 }
             },
             request=httpx.Request("GET", "https://example.com"),
         )
-        with patch.object(client._http, "get", side_effect=[page1, page2]):
-            with patch("time.sleep"):
-                artists = client.get_top_artists("testuser", limit=1)
-                assert len(artists) == 2
+        with (
+            patch.object(client._http, "get", side_effect=[page1, page2]),
+            patch("time.sleep"),
+        ):
+            artists = client.get_top_artists("testuser", limit=1)
+            assert len(artists) == 2
 
     def test_api_error_raises(self, client):
         mock_response = httpx.Response(
@@ -143,9 +181,11 @@ class TestGetTopArtists:
             json={"error": 6, "message": "User not found"},
             request=httpx.Request("GET", "https://example.com"),
         )
-        with patch.object(client._http, "get", return_value=mock_response):
-            with pytest.raises(LastfmApiError, match="User not found"):
-                client.get_top_artists("nonexistent")
+        with (
+            patch.object(client._http, "get", return_value=mock_response),
+            pytest.raises(LastfmApiError, match="User not found"),
+        ):
+            client.get_top_artists("nonexistent")
 
     def test_rate_limit_retries(self, client):
         rate_limited = httpx.Response(
@@ -157,16 +197,30 @@ class TestGetTopArtists:
             200,
             json={
                 "topartists": {
-                    "artist": [{"name": "Artist1", "playcount": "100", "mbid": "", "@attr": {"rank": "1"}}],
-                    "@attr": {"page": "1", "perPage": "200", "total": "1", "totalPages": "1"},
+                    "artist": [
+                        {
+                            "name": "Artist1",
+                            "playcount": "100",
+                            "mbid": "",
+                            "@attr": {"rank": "1"},
+                        }
+                    ],
+                    "@attr": {
+                        "page": "1",
+                        "perPage": "200",
+                        "total": "1",
+                        "totalPages": "1",
+                    },
                 }
             },
             request=httpx.Request("GET", "https://example.com"),
         )
-        with patch.object(client._http, "get", side_effect=[rate_limited, success]):
-            with patch("time.sleep"):
-                artists = client.get_top_artists("testuser")
-                assert len(artists) == 1
+        with (
+            patch.object(client._http, "get", side_effect=[rate_limited, success]),
+            patch("time.sleep"),
+        ):
+            artists = client.get_top_artists("testuser")
+            assert len(artists) == 1
 
 
 class TestGetTopAlbums:

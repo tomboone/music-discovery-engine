@@ -5,17 +5,17 @@ Revises: 48724afaf4c2
 Create Date: 2026-04-12 19:05:40.668869
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'fc62dbcac6a8'
-down_revision: Union[str, Sequence[str], None] = '48724afaf4c2'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = '48724afaf4c2'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # Well-known seed user ID for single-user development mode
 SEED_USER_ID = "d4e5f6a7-b8c9-4d0e-a1f2-b3c4d5e6f7a8"

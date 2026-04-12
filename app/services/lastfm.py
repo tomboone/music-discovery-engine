@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -21,9 +21,7 @@ class LastfmService:
             session, user_id, username, session_key
         )
 
-    def sync_taste_profile(
-        self, session: Session, user_id: uuid.UUID
-    ) -> dict:
+    def sync_taste_profile(self, session: Session, user_id: uuid.UUID) -> dict:
         profile = self._repository.get_lastfm_profile(session, user_id)
         if not profile:
             raise ValueError("Last.fm account not linked")
@@ -31,9 +29,7 @@ class LastfmService:
         artists = self._client.get_top_artists(
             profile.lastfm_username, period="overall"
         )
-        albums = self._client.get_top_albums(
-            profile.lastfm_username, period="overall"
-        )
+        albums = self._client.get_top_albums(profile.lastfm_username, period="overall")
 
         self._repository.upsert_top_artists(
             session, user_id, "lastfm", "overall", artists
@@ -42,11 +38,12 @@ class LastfmService:
             session, user_id, "lastfm", "overall", albums
         )
 
-        profile.last_synced_at = datetime.now(timezone.utc)
+        synced_at = datetime.now(UTC)
+        profile.last_synced_at = synced_at
         session.commit()
 
         return {
             "artists_count": len(artists),
             "albums_count": len(albums),
-            "synced_at": profile.last_synced_at.isoformat(),
+            "synced_at": synced_at.isoformat(),
         }

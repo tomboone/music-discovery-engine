@@ -43,9 +43,7 @@ class LastfmProfile(Base):
 
 class TasteProfileArtist(Base):
     __tablename__ = "taste_profile_artists"
-    __table_args__ = (
-        UniqueConstraint("user_id", "source", "period", "artist_name"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "source", "period", "artist_name"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(

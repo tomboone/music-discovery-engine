@@ -22,9 +22,7 @@ class LastfmRepository:
         username: str,
         session_key: str,
     ) -> LastfmProfile:
-        profile = (
-            session.query(LastfmProfile).filter_by(user_id=user_id).first()
-        )
+        profile = session.query(LastfmProfile).filter_by(user_id=user_id).first()
         if profile:
             profile.lastfm_username = username
             profile.session_key = session_key
@@ -58,7 +56,9 @@ class LastfmRepository:
             incoming_names.add(name)
             existing = (
                 session.query(TasteProfileArtist)
-                .filter_by(user_id=user_id, source=source, period=period, artist_name=name)
+                .filter_by(
+                    user_id=user_id, source=source, period=period, artist_name=name
+                )
                 .first()
             )
             if existing:

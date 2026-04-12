@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -66,13 +65,21 @@ class TestSyncTasteProfile:
             {"name": "Artist1", "mbid": "", "playcount": "100", "@attr": {"rank": "1"}}
         ]
         mock_client.get_top_albums.return_value = [
-            {"name": "Album1", "mbid": "", "playcount": "50", "artist": {"name": "Artist1", "mbid": ""}, "@attr": {"rank": "1"}}
+            {
+                "name": "Album1",
+                "mbid": "",
+                "playcount": "50",
+                "artist": {"name": "Artist1", "mbid": ""},
+                "@attr": {"rank": "1"},
+            }
         ]
         session = MagicMock()
 
         result = service.sync_taste_profile(session, user_id)
 
-        mock_client.get_top_artists.assert_called_once_with("testuser", period="overall")
+        mock_client.get_top_artists.assert_called_once_with(
+            "testuser", period="overall"
+        )
         mock_client.get_top_albums.assert_called_once_with("testuser", period="overall")
         mock_repo.upsert_top_artists.assert_called_once()
         mock_repo.upsert_top_albums.assert_called_once()

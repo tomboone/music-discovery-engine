@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 from app.clients.lastfm import LastfmClient
 from app.config import Settings
@@ -15,8 +16,8 @@ from app.services.lastfm import LastfmService
 SEED_USER_ID = uuid.UUID("d4e5f6a7-b8c9-4d0e-a1f2-b3c4d5e6f7a8")
 
 settings = Settings()
-app_engine = None
-mb_engine = None
+app_engine: Engine | None = None
+mb_engine: Engine | None = None
 
 
 @asynccontextmanager
@@ -46,11 +47,14 @@ lastfm_service = LastfmService(client=lastfm_client, repository=lastfm_repo)
 
 
 def _get_app_session():
+    assert app_engine is not None
     yield from get_app_session(app_engine)
 
 
 app.include_router(
-    create_lastfm_router(lastfm_service, lastfm_client, SEED_USER_ID, get_session=_get_app_session)
+    create_lastfm_router(
+        lastfm_service, lastfm_client, SEED_USER_ID, get_session=_get_app_session
+    )
 )
 
 
@@ -59,6 +63,7 @@ async def health() -> dict:
     result = {"status": "ok", "databases": {}}
 
     try:
+        assert app_engine is not None
         with app_engine.connect() as conn:
             conn.execute(text("SELECT 1")).scalar()
         result["databases"]["app"] = "ok"
@@ -67,6 +72,7 @@ async def health() -> dict:
         result["databases"]["app"] = str(e)
 
     try:
+        assert mb_engine is not None
         with mb_engine.connect() as conn:
             conn.execute(text("SELECT 1")).scalar()
         result["databases"]["musicbrainz"] = "ok"

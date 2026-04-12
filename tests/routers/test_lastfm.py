@@ -48,7 +48,9 @@ def client(app):
 
 class TestAuthRedirect:
     def test_redirects_to_lastfm(self, client, mock_client):
-        mock_client.get_auth_url.return_value = "https://www.last.fm/api/auth/?api_key=test"
+        mock_client.get_auth_url.return_value = (
+            "https://www.last.fm/api/auth/?api_key=test"
+        )
         response = client.get("/auth/lastfm", follow_redirects=False)
         assert response.status_code == 307
         assert "last.fm" in response.headers["location"]
@@ -92,7 +94,9 @@ class TestSync:
         assert data["albums_count"] == 200
 
     def test_sync_without_profile_returns_400(self, client, mock_service):
-        mock_service.sync_taste_profile.side_effect = ValueError("Last.fm account not linked")
+        mock_service.sync_taste_profile.side_effect = ValueError(
+            "Last.fm account not linked"
+        )
         response = client.post("/lastfm/sync")
         assert response.status_code == 400
 

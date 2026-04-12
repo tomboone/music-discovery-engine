@@ -15,7 +15,9 @@ def test_default_musicbrainz_db_url():
 
 def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("APP_DB_URL", "postgresql+psycopg://test@localhost/test_app")
-    monkeypatch.setenv("MUSICBRAINZ_DB_URL", "postgresql+psycopg://test@localhost/test_mb")
+    monkeypatch.setenv(
+        "MUSICBRAINZ_DB_URL", "postgresql+psycopg://test@localhost/test_mb"
+    )
     settings = Settings()
     assert settings.app_db_url == "postgresql+psycopg://test@localhost/test_app"
     assert settings.musicbrainz_db_url == "postgresql+psycopg://test@localhost/test_mb"
