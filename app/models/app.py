@@ -1,7 +1,14 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -86,4 +93,23 @@ class TasteProfileAlbum(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RecommendationHistory(Base):
+    __tablename__ = "recommendation_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    artist_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    artist_mbid: Mapped[uuid.UUID | None] = mapped_column()
+    seed_artist_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    seed_artist_mbid: Mapped[uuid.UUID | None] = mapped_column()
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    recommendation_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    score: Mapped[float | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )

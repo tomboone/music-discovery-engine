@@ -15,10 +15,13 @@ from app.database import (
     get_mb_session,
 )
 from app.models.musicbrainz import reflect_mb_tables
+from app.repositories.generation import GenerationRepository
 from app.repositories.lastfm import LastfmRepository
 from app.repositories.recommendations import RecommendationRepository
+from app.routers.generation import create_generation_router
 from app.routers.lastfm import create_lastfm_router
 from app.routers.recommendations import create_recommendations_router
+from app.services.generation import GenerationService
 from app.services.lastfm import LastfmService
 from app.services.recommendations import RecommendationService
 
@@ -79,6 +82,22 @@ def _get_mb_session():
 app.include_router(
     create_recommendations_router(
         rec_service,
+        SEED_USER_ID,
+        get_app_session=_get_app_session,
+        get_mb_session=_get_mb_session,
+    )
+)
+
+# Generation
+gen_repo = GenerationRepository()
+gen_service = GenerationService(
+    recommendation_service=rec_service,
+    repository=gen_repo,
+)
+
+app.include_router(
+    create_generation_router(
+        gen_service,
         SEED_USER_ID,
         get_app_session=_get_app_session,
         get_mb_session=_get_mb_session,
