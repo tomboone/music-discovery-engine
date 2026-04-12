@@ -10,6 +10,7 @@ from app.services.scoring import (
     compute_collaborator_diversity,
     compute_final_score,
     compute_genre_affinity,
+    compute_obscurity,
 )
 
 DEFAULT_RELATIONSHIP_TYPES = ["producer", "instrument", "performer", "vocal"]
@@ -17,7 +18,9 @@ DEFAULT_WEIGHTS = {
     "path_count": 1.0,
     "genre_affinity": 0.5,
     "collaborator_diversity": 0.3,
+    "obscurity": 0.5,
 }
+DEFAULT_MAX_LISTENERS = 2_000_000
 
 
 class RecommendationService:
@@ -40,6 +43,7 @@ class RecommendationService:
         limit: int = 20,
         weights: dict[str, float] | None = None,
         min_graph_results: int = 5,
+        max_listeners: int = DEFAULT_MAX_LISTENERS,
     ) -> dict | None:
         if relationship_types is None:
             relationship_types = DEFAULT_RELATIONSHIP_TYPES
@@ -78,6 +82,27 @@ class RecommendationService:
                 if count > max_collab_count:
                     max_collab_count = count
 
+        # Fetch listener counts for popularity filtering/scoring
+        listener_counts: dict[str, int] = {}
+        if self._lastfm_client:
+            for r in raw_results:
+                name = r["artist_name"]
+                if name not in listener_counts:
+                    try:
+                        listener_counts[name] = (
+                            self._lastfm_client.get_artist_listeners(name)
+                        )
+                    except Exception:
+                        listener_counts[name] = 0
+
+        # Filter by max_listeners hard ceiling
+        if max_listeners > 0 and listener_counts:
+            raw_results = [
+                r
+                for r in raw_results
+                if listener_counts.get(r["artist_name"], 0) < max_listeners
+            ]
+
         # Score each candidate
         scored = []
         for r in raw_results:
@@ -86,12 +111,18 @@ class RecommendationService:
             collab_div = compute_collaborator_diversity(
                 r.get("paths", []), max_collab_count
             )
-            final = compute_final_score(r["path_count"], genre_aff, collab_div, weights)
+            listeners = listener_counts.get(r["artist_name"], 0)
+            obscurity = compute_obscurity(listeners, max_listeners)
+            final = compute_final_score(
+                r["path_count"], genre_aff, collab_div, obscurity, weights
+            )
             scored.append(
                 {
                     **r,
                     "genre_affinity": genre_aff,
                     "collaborator_diversity": collab_div,
+                    "obscurity": obscurity,
+                    "listeners": listeners,
                     "final_score": final,
                 }
             )
@@ -135,6 +166,8 @@ class RecommendationService:
                         "path_count": r["path_count"],
                         "genre_affinity": round(r["genre_affinity"], 4),
                         "collaborator_diversity": round(r["collaborator_diversity"], 4),
+                        "obscurity": round(r["obscurity"], 4),
+                        "listeners": r["listeners"],
                         "final_score": round(r["final_score"], 4),
                     },
                 }
@@ -193,6 +226,7 @@ class RecommendationService:
                 "limit": limit,
                 "weights": weights,
                 "min_graph_results": min_graph_results,
+                "max_listeners": max_listeners,
             },
             "filtered_known_artists": filtered_count,
         }

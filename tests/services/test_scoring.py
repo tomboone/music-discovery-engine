@@ -4,6 +4,7 @@ from app.services.scoring import (
     compute_collaborator_diversity,
     compute_final_score,
     compute_genre_affinity,
+    compute_obscurity,
 )
 
 
@@ -85,19 +86,48 @@ class TestComputeCollaboratorDiversity:
         assert result == pytest.approx(0.0)
 
 
+class TestComputeObscurity:
+    def test_very_popular_is_low(self):
+        result = compute_obscurity(5_000_000, max_listeners=2_000_000)
+        assert result == pytest.approx(0.0)
+
+    def test_at_threshold_is_zero(self):
+        result = compute_obscurity(2_000_000, max_listeners=2_000_000)
+        assert result == pytest.approx(0.0)
+
+    def test_obscure_is_positive(self):
+        result = compute_obscurity(50_000, max_listeners=2_000_000)
+        assert result > 0.2
+
+    def test_very_obscure_beats_moderately_popular(self):
+        obscure = compute_obscurity(10_000, max_listeners=2_000_000)
+        popular = compute_obscurity(1_000_000, max_listeners=2_000_000)
+        assert obscure > popular
+
+    def test_zero_listeners(self):
+        result = compute_obscurity(0, max_listeners=2_000_000)
+        assert result == pytest.approx(1.0)
+
+    def test_zero_max(self):
+        result = compute_obscurity(500_000, max_listeners=0)
+        assert result == pytest.approx(1.0)
+
+
 class TestComputeFinalScore:
     def test_default_weights(self):
         result = compute_final_score(
             path_count=3,
             genre_affinity=0.5,
             collaborator_diversity=0.4,
+            obscurity=0.6,
             weights={
                 "path_count": 1.0,
                 "genre_affinity": 0.5,
                 "collaborator_diversity": 0.3,
+                "obscurity": 0.5,
             },
         )
-        expected = 3 * 1.0 + 0.5 * 0.5 + 0.4 * 0.3
+        expected = 3 * 1.0 + 0.5 * 0.5 + 0.4 * 0.3 + 0.6 * 0.5
         assert result == pytest.approx(expected)
 
     def test_zero_weights(self):
@@ -105,10 +135,12 @@ class TestComputeFinalScore:
             path_count=3,
             genre_affinity=0.8,
             collaborator_diversity=0.6,
+            obscurity=0.5,
             weights={
                 "path_count": 0.0,
                 "genre_affinity": 0.0,
                 "collaborator_diversity": 0.0,
+                "obscurity": 0.0,
             },
         )
         assert result == pytest.approx(0.0)
@@ -118,10 +150,12 @@ class TestComputeFinalScore:
             path_count=2,
             genre_affinity=0.9,
             collaborator_diversity=0.8,
+            obscurity=0.7,
             weights={
                 "path_count": 1.0,
                 "genre_affinity": 0.0,
                 "collaborator_diversity": 0.0,
+                "obscurity": 0.0,
             },
         )
         assert result == pytest.approx(2.0)

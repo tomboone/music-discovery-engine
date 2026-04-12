@@ -139,3 +139,11 @@ class LastfmClient:
             }
             for a in artists
         ]
+
+    def get_artist_listeners(self, artist_name: str) -> int:
+        """Fetch the total unique listener count for an artist."""
+        try:
+            data = self._request({"method": "artist.getInfo", "artist": artist_name})
+            return int(data["artist"]["stats"]["listeners"])
+        except (LastfmApiError, KeyError, ValueError):
+            return 0

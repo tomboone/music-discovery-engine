@@ -26,7 +26,9 @@ def service(mock_repo):
 
 @pytest.fixture
 def mock_lastfm_client():
-    return MagicMock(spec=LastfmClient)
+    client = MagicMock(spec=LastfmClient)
+    client.get_artist_listeners.return_value = 100_000
+    return client
 
 
 @pytest.fixture

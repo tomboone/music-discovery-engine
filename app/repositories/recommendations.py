@@ -77,6 +77,7 @@ class RecommendationRepository:
                 JOIN musicbrainz.artist a ON a.id = acn.artist
                 WHERE lt.name = c.rel_type
                   AND a.gid != :seed_mbid
+                  AND a.id != c.collaborator_id
             )
             SELECT
                 artist_mbid,
@@ -212,6 +213,7 @@ class RecommendationRepository:
                 JOIN musicbrainz.artist collab ON collab.id = c.collaborator_id
                 WHERE lt.name = c.rel_type
                   AND CAST(a.gid AS text) != :seed_mbid
+                  AND a.id != c.collaborator_id
             )
             ,
             paths_per_type AS (

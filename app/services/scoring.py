@@ -37,14 +37,28 @@ def compute_collaborator_diversity(
     return sum(scores) / len(scores)
 
 
+def compute_obscurity(listeners: int, max_listeners: int) -> float:
+    """Score from 0.0 (very popular) to 1.0 (very obscure).
+    Uses inverse log scale so the penalty is steep for mega-stars
+    but gentle for moderately popular artists."""
+    if max_listeners <= 0 or listeners <= 0:
+        return 1.0
+    if listeners >= max_listeners:
+        return 0.0
+    # Inverse log: obscure artists score high, popular ones score low
+    return 1.0 - math.log(listeners) / math.log(max_listeners)
+
+
 def compute_final_score(
     path_count: int,
     genre_affinity: float,
     collaborator_diversity: float,
+    obscurity: float,
     weights: dict[str, float],
 ) -> float:
     return (
         path_count * weights.get("path_count", 1.0)
         + genre_affinity * weights.get("genre_affinity", 0.5)
         + collaborator_diversity * weights.get("collaborator_diversity", 0.3)
+        + obscurity * weights.get("obscurity", 0.5)
     )
