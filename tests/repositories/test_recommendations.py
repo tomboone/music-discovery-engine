@@ -69,6 +69,21 @@ l_artist_recording_table = Table(
     Column("link", Integer, ForeignKey("musicbrainz.link.id")),
 )
 
+tag_table = Table(
+    "tag",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String(255)),
+)
+
+artist_tag_table = Table(
+    "artist_tag",
+    metadata,
+    Column("artist", Integer, ForeignKey("musicbrainz.artist.id")),
+    Column("tag", Integer, ForeignKey("musicbrainz.tag.id")),
+    Column("count", Integer),
+)
+
 SEED_GID = "00000000-0000-0000-0000-000000000001"
 PRODUCER_GID = "00000000-0000-0000-0000-000000000010"
 PERFORMER_GID = "00000000-0000-0000-0000-000000000020"
@@ -163,6 +178,20 @@ def seeded_session(mb_session):
     s.execute(
         l_artist_recording_table.insert().values(id=8, entity0=20, entity1=6, link=2)
     )
+    s.execute(
+        l_artist_recording_table.insert().values(id=9, entity0=10, entity1=6, link=1)
+    )
+
+    # Tags
+    s.execute(tag_table.insert().values(id=1, name="indie rock"))
+    s.execute(tag_table.insert().values(id=2, name="noise pop"))
+    s.execute(tag_table.insert().values(id=3, name="jazz"))
+    s.execute(artist_tag_table.insert().values(artist=1, tag=1, count=9))
+    s.execute(artist_tag_table.insert().values(artist=1, tag=2, count=5))
+    s.execute(artist_tag_table.insert().values(artist=100, tag=1, count=7))
+    s.execute(artist_tag_table.insert().values(artist=200, tag=3, count=10))
+    s.execute(artist_tag_table.insert().values(artist=300, tag=1, count=3))
+    s.execute(artist_tag_table.insert().values(artist=300, tag=2, count=2))
 
     s.commit()
     return s
@@ -180,8 +209,8 @@ class TestFindMultiPathArtists:
         )
         names = [r["artist_name"] for r in results]
         assert "Artist X" in names
+        assert "Artist Z" in names
         assert "Artist Y" not in names
-        assert "Artist Z" not in names
 
     def test_single_path_with_min_paths_1(self, seeded_session):
         repo = RecommendationRepository()
@@ -209,7 +238,7 @@ class TestFindMultiPathArtists:
         names = [r["artist_name"] for r in results]
         assert "Artist X" in names
         assert "Artist Y" in names
-        assert "Artist Z" not in names
+        assert "Artist Z" in names
 
     def test_respects_limit(self, seeded_session):
         repo = RecommendationRepository()
@@ -276,3 +305,56 @@ class TestGetArtistByMbid:
             uuid.UUID("99999999-9999-9999-9999-999999999999"),
         )
         assert result is None
+
+
+class TestSeedExcludedFromCollaborators:
+    def test_seed_not_in_via_paths(self, seeded_session):
+        repo = RecommendationRepository()
+        results = repo.find_multi_path_artists(
+            seeded_session,
+            seed_mbid=uuid.UUID(SEED_GID),
+            relationship_types=["producer", "performer"],
+            min_paths=1,
+            limit=20,
+        )
+        for r in results:
+            for p in r["paths"]:
+                assert p["via"] != "Seed Artist"
+
+
+class TestCollaboratorArtistCount:
+    def test_paths_include_collaborator_artist_count(self, seeded_session):
+        repo = RecommendationRepository()
+        results = repo.find_multi_path_artists(
+            seeded_session,
+            seed_mbid=uuid.UUID(SEED_GID),
+            relationship_types=["producer", "performer"],
+            min_paths=1,
+            limit=20,
+        )
+        for r in results:
+            for p in r["paths"]:
+                assert "collaborator_artist_count" in p
+                assert isinstance(p["collaborator_artist_count"], int)
+                assert p["collaborator_artist_count"] >= 1
+
+
+class TestGetArtistTags:
+    def test_returns_tags_for_known_artists(self, seeded_session):
+        repo = RecommendationRepository()
+        tags = repo.get_artist_tags(seeded_session, [SEED_GID, ARTIST_X_GID])
+        assert SEED_GID in tags
+        assert tags[SEED_GID]["indie rock"] == 9
+        assert tags[SEED_GID]["noise pop"] == 5
+        assert ARTIST_X_GID in tags
+        assert tags[ARTIST_X_GID]["indie rock"] == 7
+
+    def test_returns_empty_for_untagged_artist(self, seeded_session):
+        repo = RecommendationRepository()
+        tags = repo.get_artist_tags(seeded_session, [PRODUCER_GID])
+        assert tags.get(PRODUCER_GID, {}) == {}
+
+    def test_returns_empty_for_empty_list(self, seeded_session):
+        repo = RecommendationRepository()
+        tags = repo.get_artist_tags(seeded_session, [])
+        assert tags == {}

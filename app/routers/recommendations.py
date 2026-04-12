@@ -49,8 +49,16 @@ def create_recommendations_router(
         relationship_types: str = Query(default=DEFAULT_TYPES),
         min_paths: int = Query(default=2, ge=1),
         limit: int = Query(default=20, ge=1, le=100),
+        weight_path_count: float = Query(default=1.0, ge=0.0),
+        weight_genre_affinity: float = Query(default=0.5, ge=0.0),
+        weight_collaborator_diversity: float = Query(default=0.3, ge=0.0),
     ):
         types_list = [t.strip() for t in relationship_types.split(",") if t.strip()]
+        weights = {
+            "path_count": weight_path_count,
+            "genre_affinity": weight_genre_affinity,
+            "collaborator_diversity": weight_collaborator_diversity,
+        }
 
         app_gen = _get_app_session()
         mb_gen = _get_mb_session()
@@ -65,6 +73,7 @@ def create_recommendations_router(
                 relationship_types=types_list,
                 min_paths=min_paths,
                 limit=limit,
+                weights=weights,
             )
             if result is None:
                 return JSONResponse(

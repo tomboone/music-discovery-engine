@@ -58,6 +58,7 @@ class RecommendationRepository:
                 JOIN musicbrainz.link_type lt ON lt.id = l.link_type
                 JOIN seed_recordings sr ON sr.recording_id = lar.entity1
                 WHERE lt.name IN (:rt0, :rt1, :rt2, :rt3)
+                  AND lar.entity0 NOT IN (SELECT id FROM seed)
             ),
             discovered AS (
                 SELECT DISTINCT
@@ -118,7 +119,27 @@ class RecommendationRepository:
                             {"cid": int(collab_id)},
                         ).fetchone()
                         via_name = collab_row.name if collab_row else str(collab_id)
-                        paths.append({"relationship_type": rel_type, "via": via_name})
+                        count_row = session.execute(
+                            text("""
+                                SELECT COUNT(DISTINCT acn.artist) AS cnt
+                                FROM musicbrainz.l_artist_recording lar
+                                JOIN musicbrainz.link l ON l.id = lar.link
+                                JOIN musicbrainz.link_type lt ON lt.id = l.link_type
+                                JOIN musicbrainz.recording r ON r.id = lar.entity1
+                                JOIN musicbrainz.artist_credit_name acn
+                                    ON acn.artist_credit = r.artist_credit
+                                WHERE lar.entity0 = :cid AND lt.name = :rtype
+                            """),
+                            {"cid": int(collab_id), "rtype": rel_type},
+                        ).fetchone()
+                        artist_count = count_row.cnt if count_row else 1
+                        paths.append(
+                            {
+                                "relationship_type": rel_type,
+                                "via": via_name,
+                                "collaborator_artist_count": artist_count,
+                            }
+                        )
 
             results.append(
                 {
@@ -160,6 +181,7 @@ class RecommendationRepository:
                 JOIN musicbrainz.link_type lt ON lt.id = l.link_type
                 JOIN seed_recordings sr ON sr.recording_id = lar.entity1
                 WHERE lt.name = ANY(:relationship_types)
+                  AND lar.entity0 NOT IN (SELECT id FROM seed)
             ),
             discovered AS (
                 SELECT DISTINCT
@@ -167,7 +189,17 @@ class RecommendationRepository:
                     a.name AS artist_name,
                     c.rel_type,
                     c.collaborator_id,
-                    collab.name AS collaborator_name
+                    collab.name AS collaborator_name,
+                    (SELECT COUNT(DISTINCT acn3.artist)
+                     FROM musicbrainz.l_artist_recording lar3
+                     JOIN musicbrainz.link l3 ON l3.id = lar3.link
+                     JOIN musicbrainz.link_type lt3 ON lt3.id = l3.link_type
+                     JOIN musicbrainz.recording r3 ON r3.id = lar3.entity1
+                     JOIN musicbrainz.artist_credit_name acn3
+                         ON acn3.artist_credit = r3.artist_credit
+                     WHERE lar3.entity0 = c.collaborator_id
+                       AND lt3.name = c.rel_type
+                    ) AS collaborator_artist_count
                 FROM collaborators c
                 JOIN musicbrainz.l_artist_recording lar
                     ON lar.entity0 = c.collaborator_id
@@ -187,8 +219,10 @@ class RecommendationRepository:
                     artist_mbid,
                     artist_name,
                     rel_type,
-                    collaborator_name
+                    collaborator_name,
+                    collaborator_artist_count
                 FROM discovered
+                ORDER BY artist_mbid, rel_type, collaborator_artist_count DESC
             )
             SELECT
                 p.artist_mbid,
@@ -197,7 +231,8 @@ class RecommendationRepository:
                 json_agg(
                     jsonb_build_object(
                         'relationship_type', p.rel_type,
-                        'via', p.collaborator_name
+                        'via', p.collaborator_name,
+                        'collaborator_artist_count', p.collaborator_artist_count
                     )
                 ) AS paths
             FROM paths_per_type p
@@ -220,6 +255,9 @@ class RecommendationRepository:
         results = []
         for row in rows:
             paths = row.paths if isinstance(row.paths, list) else []
+            for p in paths:
+                if "collaborator_artist_count" in p:
+                    p["collaborator_artist_count"] = int(p["collaborator_artist_count"])
             results.append(
                 {
                     "artist_name": row.artist_name,
@@ -245,3 +283,44 @@ class RecommendationRepository:
         if row is None:
             return None
         return {"name": row.name, "mbid": row.gid}
+
+    def get_artist_tags(
+        self, session: Session, artist_mbids: list[str]
+    ) -> dict[str, dict[str, int]]:
+        if not artist_mbids:
+            return {}
+        dialect = session.bind.dialect.name if session.bind else "postgresql"
+
+        if dialect == "sqlite":
+            placeholders = ", ".join(f":m{i}" for i in range(len(artist_mbids)))
+            sql = text(f"""
+                SELECT a.gid AS artist_mbid, t.name AS tag_name, at.count
+                FROM musicbrainz.artist a
+                JOIN musicbrainz.artist_tag at ON at.artist = a.id
+                JOIN musicbrainz.tag t ON t.id = at.tag
+                WHERE a.gid IN ({placeholders})
+                  AND at.count > 0
+            """)
+            params = {f"m{i}": mbid for i, mbid in enumerate(artist_mbids)}
+        else:
+            sql = text("""
+                SELECT CAST(a.gid AS text) AS artist_mbid,
+                       t.name AS tag_name, at.count
+                FROM musicbrainz.artist a
+                JOIN musicbrainz.artist_tag at ON at.artist = a.id
+                JOIN musicbrainz.tag t ON t.id = at.tag
+                WHERE CAST(a.gid AS text) = ANY(:mbids)
+                  AND at.count > 0
+            """)
+            params = {"mbids": artist_mbids}
+
+        rows = session.execute(sql, params).fetchall()
+        result: dict[str, dict[str, int]] = {}
+        for row in rows:
+            mbid = row[0]
+            tag_name = row[1]
+            tag_count = int(row[2])
+            if mbid not in result:
+                result[mbid] = {}
+            result[mbid][tag_name] = tag_count
+        return result
