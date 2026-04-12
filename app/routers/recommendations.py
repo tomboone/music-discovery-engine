@@ -52,6 +52,7 @@ def create_recommendations_router(
         weight_path_count: float = Query(default=1.0, ge=0.0),
         weight_genre_affinity: float = Query(default=0.5, ge=0.0),
         weight_collaborator_diversity: float = Query(default=0.3, ge=0.0),
+        min_graph_results: int = Query(default=5, ge=0),
     ):
         types_list = [t.strip() for t in relationship_types.split(",") if t.strip()]
         weights = {
@@ -74,6 +75,7 @@ def create_recommendations_router(
                 min_paths=min_paths,
                 limit=limit,
                 weights=weights,
+                min_graph_results=min_graph_results,
             )
             if result is None:
                 return JSONResponse(

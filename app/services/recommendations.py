@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clients.lastfm import LastfmClient
 from app.models.app import TasteProfileArtist
 from app.repositories.recommendations import RecommendationRepository
 from app.services.scoring import (
@@ -20,8 +21,13 @@ DEFAULT_WEIGHTS = {
 
 
 class RecommendationService:
-    def __init__(self, repository: RecommendationRepository) -> None:
+    def __init__(
+        self,
+        repository: RecommendationRepository,
+        lastfm_client: LastfmClient | None = None,
+    ) -> None:
         self._repository = repository
+        self._lastfm_client = lastfm_client
 
     def get_recommendations(
         self,
@@ -33,6 +39,7 @@ class RecommendationService:
         min_paths: int = 2,
         limit: int = 20,
         weights: dict[str, float] | None = None,
+        min_graph_results: int = 5,
     ) -> dict | None:
         if relationship_types is None:
             relationship_types = DEFAULT_RELATIONSHIP_TYPES
@@ -127,14 +134,59 @@ class RecommendationService:
                 }
             )
 
+        # Fallback: Last.fm similar artists
+        fallback_recommendations: list[dict] = []
+        fallback_reason: str | None = None
+
+        if (
+            min_graph_results > 0
+            and len(recommendations) < min_graph_results
+            and self._lastfm_client is not None
+        ):
+            try:
+                similar = self._lastfm_client.get_similar_artists(seed_artist["name"])
+            except Exception:
+                similar = []
+
+            graph_names = {r["artist"]["name"] for r in recommendations}
+
+            for s in similar:
+                # Filter known artists by MBID
+                if s["mbid"]:
+                    try:
+                        s_mbid = uuid.UUID(s["mbid"])
+                        if s_mbid in known_mbids:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                # Filter duplicates with graph results by name
+                if s["name"] in graph_names:
+                    continue
+                fallback_recommendations.append(
+                    {
+                        "artist": {
+                            "name": s["name"],
+                            "mbid": s["mbid"],
+                        },
+                        "match": s["match"],
+                        "source": "lastfm_similar",
+                    }
+                )
+
+            if fallback_recommendations:
+                fallback_reason = "graph_results_below_threshold"
+
         return {
             "seed_artist": seed_artist,
             "recommendations": recommendations,
+            "fallback_recommendations": fallback_recommendations,
+            "fallback_reason": fallback_reason,
             "params": {
                 "relationship_types": relationship_types,
                 "min_paths": min_paths,
                 "limit": limit,
                 "weights": weights,
+                "min_graph_results": min_graph_results,
             },
             "filtered_known_artists": filtered_count,
         }

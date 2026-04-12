@@ -68,7 +68,7 @@ app.include_router(
 
 # Recommendations
 rec_repo = RecommendationRepository()
-rec_service = RecommendationService(repository=rec_repo)
+rec_service = RecommendationService(repository=rec_repo, lastfm_client=lastfm_client)
 
 
 def _get_mb_session():

@@ -256,3 +256,61 @@ class TestGetTopAlbums:
             assert len(albums) == 1
             assert albums[0]["name"] == "I Can Hear the Heart Beating as One"
             assert albums[0]["artist"]["name"] == "Yo La Tengo"
+
+
+class TestGetSimilarArtists:
+    def test_returns_similar_artists(self, client):
+        mock_response = httpx.Response(
+            200,
+            json={
+                "similarartists": {
+                    "artist": [
+                        {
+                            "name": "Lali Puna",
+                            "mbid": "a1b2c3d4-0000-0000-0000-000000000001",
+                            "match": "0.87",
+                            "url": "https://www.last.fm/music/Lali+Puna",
+                            "image": [],
+                        },
+                        {
+                            "name": "Ms. John Soda",
+                            "mbid": "",
+                            "match": "0.65",
+                            "url": "https://www.last.fm/music/Ms.+John+Soda",
+                            "image": [],
+                        },
+                    ]
+                }
+            },
+            request=httpx.Request("GET", "https://example.com"),
+        )
+        with patch.object(client._http, "get", return_value=mock_response):
+            results = client.get_similar_artists("The Notwist")
+            assert len(results) == 2
+            assert results[0]["name"] == "Lali Puna"
+            assert results[0]["match"] == pytest.approx(0.87)
+            assert results[0]["mbid"] == "a1b2c3d4-0000-0000-0000-000000000001"
+            assert results[1]["name"] == "Ms. John Soda"
+            assert results[1]["mbid"] == ""
+
+    def test_empty_results(self, client):
+        mock_response = httpx.Response(
+            200,
+            json={"similarartists": {"artist": []}},
+            request=httpx.Request("GET", "https://example.com"),
+        )
+        with patch.object(client._http, "get", return_value=mock_response):
+            results = client.get_similar_artists("Unknown Artist")
+            assert results == []
+
+    def test_api_error(self, client):
+        mock_response = httpx.Response(
+            200,
+            json={"error": 6, "message": "Artist not found"},
+            request=httpx.Request("GET", "https://example.com"),
+        )
+        with (
+            patch.object(client._http, "get", return_value=mock_response),
+            pytest.raises(LastfmApiError, match="Artist not found"),
+        ):
+            client.get_similar_artists("Nonexistent")

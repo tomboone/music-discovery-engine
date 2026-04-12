@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.clients.lastfm import LastfmClient
 from app.services.recommendations import RecommendationService
 
 SEED_MBID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -21,6 +22,16 @@ def mock_repo():
 @pytest.fixture
 def service(mock_repo):
     return RecommendationService(repository=mock_repo)
+
+
+@pytest.fixture
+def mock_lastfm_client():
+    return MagicMock(spec=LastfmClient)
+
+
+@pytest.fixture
+def service_with_client(mock_repo, mock_lastfm_client):
+    return RecommendationService(repository=mock_repo, lastfm_client=mock_lastfm_client)
 
 
 def _make_candidate(name, mbid, path_count=2, paths=None):
@@ -235,3 +246,161 @@ class TestGetRecommendations:
         mbids = call_args[0][1]
         assert str(SEED_MBID) in mbids
         assert str(UNKNOWN_MBID) in mbids
+
+
+class TestFallbackRecommendations:
+    def test_fallback_triggers_below_threshold(
+        self, service_with_client, mock_repo, mock_lastfm_client
+    ):
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "The Notwist",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = [
+            _make_candidate("One Result", UNKNOWN_MBID),
+        ]
+        mock_lastfm_client.get_similar_artists.return_value = [
+            {"name": "Lali Puna", "mbid": "aaa", "match": 0.87},
+            {"name": "Ms. John Soda", "mbid": "", "match": 0.65},
+        ]
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        result = service_with_client.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            min_graph_results=5,
+        )
+
+        assert len(result["fallback_recommendations"]) == 2
+        assert result["fallback_recommendations"][0]["artist"]["name"] == "Lali Puna"
+        assert result["fallback_recommendations"][0]["match"] == pytest.approx(0.87)
+        assert result["fallback_recommendations"][0]["source"] == "lastfm_similar"
+        assert result["fallback_reason"] == "graph_results_below_threshold"
+
+    def test_fallback_does_not_trigger_above_threshold(
+        self, service_with_client, mock_repo, mock_lastfm_client
+    ):
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        candidates = [_make_candidate(f"Artist {i}", uuid.uuid4()) for i in range(6)]
+        mock_repo.find_multi_path_artists.return_value = candidates
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        result = service_with_client.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            min_graph_results=5,
+        )
+
+        mock_lastfm_client.get_similar_artists.assert_not_called()
+        assert result["fallback_recommendations"] == []
+        assert result["fallback_reason"] is None
+
+    def test_fallback_filters_known_artists(
+        self, service_with_client, mock_repo, mock_lastfm_client
+    ):
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = []
+        mock_lastfm_client.get_similar_artists.return_value = [
+            {"name": "Known", "mbid": str(KNOWN_MBID), "match": 0.9},
+            {"name": "Unknown", "mbid": str(UNKNOWN_MBID), "match": 0.7},
+        ]
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = [
+            KNOWN_MBID,
+        ]
+
+        result = service_with_client.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            min_graph_results=5,
+        )
+
+        names = [r["artist"]["name"] for r in result["fallback_recommendations"]]
+        assert "Known" not in names
+        assert "Unknown" in names
+
+    def test_fallback_filters_duplicates_with_graph(
+        self, service_with_client, mock_repo, mock_lastfm_client
+    ):
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = [
+            _make_candidate("Overlap Artist", UNKNOWN_MBID),
+        ]
+        mock_lastfm_client.get_similar_artists.return_value = [
+            {"name": "Overlap Artist", "mbid": "", "match": 0.8},
+            {"name": "New Artist", "mbid": "", "match": 0.6},
+        ]
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        result = service_with_client.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            min_graph_results=5,
+        )
+
+        names = [r["artist"]["name"] for r in result["fallback_recommendations"]]
+        assert "Overlap Artist" not in names
+        assert "New Artist" in names
+
+    def test_fallback_disabled_when_client_none(self, service, mock_repo):
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = []
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        result = service.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            min_graph_results=5,
+        )
+
+        assert result["fallback_recommendations"] == []
+        assert result["fallback_reason"] is None
+
+    def test_fallback_disabled_when_threshold_zero(
+        self, service_with_client, mock_repo, mock_lastfm_client
+    ):
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = []
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        result = service_with_client.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            min_graph_results=0,
+        )
+
+        mock_lastfm_client.get_similar_artists.assert_not_called()
+        assert result["fallback_recommendations"] == []
+        assert result["fallback_reason"] is None

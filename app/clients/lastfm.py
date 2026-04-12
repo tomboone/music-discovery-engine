@@ -121,3 +121,21 @@ class LastfmClient:
             time.sleep(0.25)
 
         return all_albums
+
+    def get_similar_artists(self, artist: str, limit: int = 20) -> list[dict]:
+        data = self._request(
+            {
+                "method": "artist.getSimilar",
+                "artist": artist,
+                "limit": str(limit),
+            }
+        )
+        artists = data.get("similarartists", {}).get("artist", [])
+        return [
+            {
+                "name": a["name"],
+                "mbid": a.get("mbid", ""),
+                "match": float(a.get("match", 0)),
+            }
+            for a in artists
+        ]

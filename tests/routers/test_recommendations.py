@@ -178,3 +178,38 @@ class TestGetRecommendations:
         rec = data["recommendations"][0]
         assert "score" in rec
         assert rec["score"]["final_score"] == 2.84
+
+    def test_min_graph_results_param(self, client, mock_service):
+        mock_service.get_recommendations.return_value = {
+            "seed_artist": {"name": "Test", "mbid": SEED_MBID},
+            "recommendations": [],
+            "fallback_recommendations": [
+                {
+                    "artist": {"name": "Similar", "mbid": ""},
+                    "match": 0.8,
+                    "source": "lastfm_similar",
+                }
+            ],
+            "fallback_reason": "graph_results_below_threshold",
+            "params": {
+                "relationship_types": ["producer"],
+                "min_paths": 2,
+                "limit": 20,
+                "weights": {
+                    "path_count": 1.0,
+                    "genre_affinity": 0.5,
+                    "collaborator_diversity": 0.3,
+                },
+                "min_graph_results": 10,
+            },
+            "filtered_known_artists": 0,
+        }
+        response = client.get(
+            f"/recommendations?seed_mbid={SEED_MBID}&min_graph_results=10"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["fallback_recommendations"]) == 1
+        assert data["fallback_reason"] == "graph_results_below_threshold"
+        call_kwargs = mock_service.get_recommendations.call_args
+        assert call_kwargs.kwargs["min_graph_results"] == 10
