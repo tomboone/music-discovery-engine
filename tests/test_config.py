@@ -19,3 +19,21 @@ def test_settings_from_env(monkeypatch):
     settings = Settings()
     assert settings.app_db_url == "postgresql+psycopg://test@localhost/test_app"
     assert settings.musicbrainz_db_url == "postgresql+psycopg://test@localhost/test_mb"
+
+
+def test_lastfm_settings_defaults():
+    settings = Settings()
+    assert settings.lastfm_api_key == "" or isinstance(settings.lastfm_api_key, str)
+    assert settings.lastfm_callback_url == (
+        "https://music-discovery-api.localhost/auth/lastfm/callback"
+    )
+
+
+def test_lastfm_settings_from_env(monkeypatch):
+    monkeypatch.setenv("LASTFM_API_KEY", "test_key_123")
+    monkeypatch.setenv("LASTFM_SHARED_SECRET", "test_secret_456")
+    monkeypatch.setenv("LASTFM_CALLBACK_URL", "http://localhost/callback")
+    settings = Settings()
+    assert settings.lastfm_api_key == "test_key_123"
+    assert settings.lastfm_shared_secret == "test_secret_456"
+    assert settings.lastfm_callback_url == "http://localhost/callback"

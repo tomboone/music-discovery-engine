@@ -1,11 +1,18 @@
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.clients.lastfm import LastfmClient
 from app.config import Settings
-from app.database import create_app_db, get_app_engine, get_mb_engine
+from app.database import create_app_db, get_app_engine, get_app_session, get_mb_engine
 from app.models.musicbrainz import reflect_mb_tables
+from app.repositories.lastfm import LastfmRepository
+from app.routers.lastfm import create_lastfm_router
+from app.services.lastfm import LastfmService
+
+SEED_USER_ID = uuid.UUID("d4e5f6a7-b8c9-4d0e-a1f2-b3c4d5e6f7a8")
 
 settings = Settings()
 app_engine = None
@@ -27,6 +34,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Music Discovery Engine", lifespan=lifespan)
+
+# Last.fm integration
+lastfm_client = LastfmClient(
+    api_key=settings.lastfm_api_key,
+    shared_secret=settings.lastfm_shared_secret,
+    callback_url=settings.lastfm_callback_url,
+)
+lastfm_repo = LastfmRepository()
+lastfm_service = LastfmService(client=lastfm_client, repository=lastfm_repo)
+
+
+def _get_app_session():
+    yield from get_app_session(app_engine)
+
+
+app.include_router(
+    create_lastfm_router(lastfm_service, lastfm_client, SEED_USER_ID, get_session=_get_app_session)
+)
 
 
 @app.get("/health")

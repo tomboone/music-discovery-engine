@@ -9,6 +9,7 @@ dependencies = [
     "psycopg[binary]",
     "pydantic",
     "pydantic-settings",
+    "python-dotenv",
     "sqlalchemy",
     "uvicorn",
 ]
