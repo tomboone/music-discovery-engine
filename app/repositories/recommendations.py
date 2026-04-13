@@ -160,11 +160,13 @@ class RecommendationRepository:
         min_paths: int,
         limit: int,
     ) -> list[dict]:
-        sql = text("""
+        # Main query — find multi-path artists WITHOUT the expensive
+        # collaborator_artist_count subquery
+        main_sql = text("""
             WITH seed AS (
                 SELECT a.id
                 FROM musicbrainz.artist a
-                WHERE CAST(a.gid AS text) = :seed_mbid
+                WHERE a.gid = CAST(:seed_mbid AS uuid)
             ),
             seed_recordings AS (
                 SELECT r.id AS recording_id
@@ -190,17 +192,7 @@ class RecommendationRepository:
                     a.name AS artist_name,
                     c.rel_type,
                     c.collaborator_id,
-                    collab.name AS collaborator_name,
-                    (SELECT COUNT(DISTINCT acn3.artist)
-                     FROM musicbrainz.l_artist_recording lar3
-                     JOIN musicbrainz.link l3 ON l3.id = lar3.link
-                     JOIN musicbrainz.link_type lt3 ON lt3.id = l3.link_type
-                     JOIN musicbrainz.recording r3 ON r3.id = lar3.entity1
-                     JOIN musicbrainz.artist_credit_name acn3
-                         ON acn3.artist_credit = r3.artist_credit
-                     WHERE lar3.entity0 = c.collaborator_id
-                       AND lt3.name = c.rel_type
-                    ) AS collaborator_artist_count
+                    collab.name AS collaborator_name
                 FROM collaborators c
                 JOIN musicbrainz.l_artist_recording lar
                     ON lar.entity0 = c.collaborator_id
@@ -212,19 +204,17 @@ class RecommendationRepository:
                 JOIN musicbrainz.artist a ON a.id = acn.artist
                 JOIN musicbrainz.artist collab ON collab.id = c.collaborator_id
                 WHERE lt.name = c.rel_type
-                  AND CAST(a.gid AS text) != :seed_mbid
+                  AND a.gid != CAST(:seed_mbid AS uuid)
                   AND a.id != c.collaborator_id
-            )
-            ,
+            ),
             paths_per_type AS (
                 SELECT DISTINCT ON (artist_mbid, rel_type)
                     artist_mbid,
                     artist_name,
                     rel_type,
                     collaborator_name,
-                    collaborator_artist_count
+                    collaborator_id
                 FROM discovered
-                ORDER BY artist_mbid, rel_type, collaborator_artist_count DESC
             )
             SELECT
                 p.artist_mbid,
@@ -234,7 +224,7 @@ class RecommendationRepository:
                     jsonb_build_object(
                         'relationship_type', p.rel_type,
                         'via', p.collaborator_name,
-                        'collaborator_artist_count', p.collaborator_artist_count
+                        'collaborator_id', p.collaborator_id
                     )
                 ) AS paths
             FROM paths_per_type p
@@ -245,7 +235,7 @@ class RecommendationRepository:
         """)
 
         rows = session.execute(
-            sql,
+            main_sql,
             {
                 "seed_mbid": str(seed_mbid),
                 "relationship_types": relationship_types,
@@ -254,18 +244,60 @@ class RecommendationRepository:
             },
         ).fetchall()
 
-        results = []
+        # Collect unique collaborator IDs + rel_types for batch diversity lookup
+        collab_keys: set[tuple[int, str]] = set()
         for row in rows:
             paths = row.paths if isinstance(row.paths, list) else []
             for p in paths:
-                if "collaborator_artist_count" in p:
-                    p["collaborator_artist_count"] = int(p["collaborator_artist_count"])
+                collab_keys.add((int(p["collaborator_id"]), p["relationship_type"]))
+
+        # Batch query for collaborator_artist_count
+        collab_counts: dict[tuple[int, str], int] = {}
+        if collab_keys:
+            collab_ids = list({k[0] for k in collab_keys})
+            count_sql = text("""
+                SELECT lar.entity0 AS collab_id,
+                       lt.name AS rel_type,
+                       COUNT(DISTINCT acn.artist) AS artist_count
+                FROM musicbrainz.l_artist_recording lar
+                JOIN musicbrainz.link l ON l.id = lar.link
+                JOIN musicbrainz.link_type lt ON lt.id = l.link_type
+                JOIN musicbrainz.recording r ON r.id = lar.entity1
+                JOIN musicbrainz.artist_credit_name acn
+                    ON acn.artist_credit = r.artist_credit
+                WHERE lar.entity0 = ANY(:collab_ids)
+                  AND lt.name = ANY(:rel_types)
+                GROUP BY lar.entity0, lt.name
+            """)
+            rel_types_for_count = list({k[1] for k in collab_keys})
+            count_rows = session.execute(
+                count_sql,
+                {"collab_ids": collab_ids, "rel_types": rel_types_for_count},
+            ).fetchall()
+            for cr in count_rows:
+                collab_counts[(int(cr[0]), cr[1])] = int(cr[2])
+
+        # Build results with collaborator_artist_count
+        results = []
+        for row in rows:
+            paths = row.paths if isinstance(row.paths, list) else []
+            clean_paths = []
+            for p in paths:
+                cid = int(p["collaborator_id"])
+                rtype = p["relationship_type"]
+                clean_paths.append(
+                    {
+                        "relationship_type": rtype,
+                        "via": p["via"],
+                        "collaborator_artist_count": collab_counts.get((cid, rtype), 1),
+                    }
+                )
             results.append(
                 {
                     "artist_name": row.artist_name,
                     "artist_mbid": row.artist_mbid,
                     "path_count": row.path_count,
-                    "paths": paths,
+                    "paths": clean_paths,
                 }
             )
         return results
@@ -278,7 +310,7 @@ class RecommendationRepository:
         else:
             sql = text(
                 "SELECT CAST(gid AS text) AS gid, name "
-                "FROM musicbrainz.artist WHERE CAST(gid AS text) = :mbid"
+                "FROM musicbrainz.artist WHERE gid = CAST(:mbid AS uuid)"
             )
 
         row = session.execute(sql, {"mbid": str(mbid)}).fetchone()
@@ -329,7 +361,7 @@ class RecommendationRepository:
             sql = text("""
                 SELECT DISTINCT
                     CASE
-                        WHEN CAST(a1.gid AS text) = :seed_mbid
+                        WHEN a1.gid = CAST(:seed_mbid AS uuid)
                             THEN CAST(a2.gid AS text)
                         ELSE CAST(a1.gid AS text)
                     END AS related_mbid
@@ -338,8 +370,8 @@ class RecommendationRepository:
                 JOIN musicbrainz.link_type lt ON lt.id = l.link_type
                 JOIN musicbrainz.artist a1 ON a1.id = laa.entity0
                 JOIN musicbrainz.artist a2 ON a2.id = laa.entity1
-                WHERE (CAST(a1.gid AS text) = :seed_mbid
-                    OR CAST(a2.gid AS text) = :seed_mbid)
+                WHERE (a1.gid = CAST(:seed_mbid AS uuid)
+                    OR a2.gid = CAST(:seed_mbid AS uuid))
                   AND lt.name = ANY(:rel_types)
             """)
             params = {
@@ -375,7 +407,7 @@ class RecommendationRepository:
                 FROM musicbrainz.artist a
                 JOIN musicbrainz.artist_tag at ON at.artist = a.id
                 JOIN musicbrainz.tag t ON t.id = at.tag
-                WHERE CAST(a.gid AS text) = ANY(:mbids)
+                WHERE a.gid = ANY(CAST(:mbids AS uuid[]))
                   AND at.count > 0
             """)
             params = {"mbids": artist_mbids}

@@ -96,6 +96,19 @@ class TasteProfileAlbum(Base):
     )
 
 
+class ArtistListenerCache(Base):
+    __tablename__ = "artist_listener_cache"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    artist_name: Mapped[str] = mapped_column(
+        String(512), unique=True, index=True, nullable=False
+    )
+    listeners: Mapped[int] = mapped_column(Integer, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class RecommendationHistory(Base):
     __tablename__ = "recommendation_history"
 

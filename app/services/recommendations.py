@@ -1,10 +1,11 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.clients.lastfm import LastfmClient
-from app.models.app import TasteProfileArtist
+from app.models.app import ArtistListenerCache, TasteProfileArtist
 from app.repositories.recommendations import RecommendationRepository
 from app.services.scoring import (
     compute_collaborator_diversity,
@@ -82,18 +83,52 @@ class RecommendationService:
                 if count > max_collab_count:
                     max_collab_count = count
 
-        # Fetch listener counts for popularity filtering/scoring
+        # Fetch listener counts — check cache first, then Last.fm API
         listener_counts: dict[str, int] = {}
-        if self._lastfm_client:
-            for r in raw_results:
-                name = r["artist_name"]
-                if name not in listener_counts:
-                    try:
-                        listener_counts[name] = (
-                            self._lastfm_client.get_artist_listeners(name)
+        names_to_fetch = {r["artist_name"] for r in raw_results}
+
+        if names_to_fetch and self._lastfm_client:
+            # Load from cache (entries less than 30 days old)
+            cutoff = datetime.now(UTC) - timedelta(days=30)
+            cached = (
+                app_session.execute(
+                    select(ArtistListenerCache).where(
+                        ArtistListenerCache.artist_name.in_(names_to_fetch),
+                        ArtistListenerCache.fetched_at > cutoff,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for c in cached:
+                listener_counts[c.artist_name] = c.listeners
+                names_to_fetch.discard(c.artist_name)
+
+        # Fetch remaining from Last.fm API
+        if names_to_fetch and self._lastfm_client:
+            for name in names_to_fetch:
+                try:
+                    count = self._lastfm_client.get_artist_listeners(name)
+                except Exception:
+                    count = 0
+                listener_counts[name] = count
+                # Upsert to cache
+                existing = app_session.execute(
+                    select(ArtistListenerCache).where(
+                        ArtistListenerCache.artist_name == name
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    existing.listeners = count
+                    existing.fetched_at = datetime.now(UTC)
+                else:
+                    app_session.add(
+                        ArtistListenerCache(
+                            artist_name=name,
+                            listeners=count,
                         )
-                    except Exception:
-                        listener_counts[name] = 0
+                    )
+            app_session.commit()
 
         # Filter by max_listeners hard ceiling
         if max_listeners > 0 and listener_counts:
