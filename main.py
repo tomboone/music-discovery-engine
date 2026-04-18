@@ -19,14 +19,17 @@ from app.models.musicbrainz import reflect_mb_tables
 from app.repositories.discogs import DiscogsRepository
 from app.repositories.generation import GenerationRepository
 from app.repositories.lastfm import LastfmRepository
+from app.repositories.mbid_resolution import MbidResolutionRepository
 from app.repositories.recommendations import RecommendationRepository
 from app.routers.discogs import create_discogs_router
 from app.routers.generation import create_generation_router
 from app.routers.lastfm import create_lastfm_router
+from app.routers.mbid_resolution import create_mbid_resolution_router
 from app.routers.recommendations import create_recommendations_router
 from app.services.discogs import DiscogsService
 from app.services.generation import GenerationService
 from app.services.lastfm import LastfmService
+from app.services.mbid_resolution import MbidResolutionService
 from app.services.recommendations import RecommendationService
 from app.services.taste_profile.ingester import TasteProfileIngester
 
@@ -107,6 +110,18 @@ def _get_mb_session():
 app.include_router(
     create_recommendations_router(
         rec_service,
+        SEED_USER_ID,
+        get_app_session=_get_app_session,
+        get_mb_session=_get_mb_session,
+    )
+)
+
+# MBID resolution
+mbid_resolution_repo = MbidResolutionRepository()
+mbid_resolution_service = MbidResolutionService(repository=mbid_resolution_repo)
+app.include_router(
+    create_mbid_resolution_router(
+        mbid_resolution_service,
         SEED_USER_ID,
         get_app_session=_get_app_session,
         get_mb_session=_get_mb_session,
