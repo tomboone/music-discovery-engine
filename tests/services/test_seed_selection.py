@@ -8,7 +8,7 @@ def _make_artist(name, mbid=None, playcount=100):
     return {
         "artist_name": name,
         "artist_mbid": mbid or str(uuid.uuid4()),
-        "playcount": playcount,
+        "count": playcount,
     }
 
 
@@ -36,12 +36,12 @@ class TestSelectSeeds:
         without_mbid = {
             "artist_name": "No MBID",
             "artist_mbid": None,
-            "playcount": 500,
+            "count": 500,
         }
         empty_mbid = {
             "artist_name": "Empty MBID",
             "artist_mbid": "",
-            "playcount": 500,
+            "count": 500,
         }
         artists = [with_mbid, without_mbid, empty_mbid]
         result = select_seeds(artists, num_seeds=5)
@@ -77,7 +77,7 @@ class TestSelectSeeds:
 
     def test_all_filtered_returns_empty(self):
         artists = [
-            {"artist_name": "A", "artist_mbid": None, "playcount": 100},
+            {"artist_name": "A", "artist_mbid": None, "count": 100},
         ]
         result = select_seeds(artists, num_seeds=5)
         assert result == []

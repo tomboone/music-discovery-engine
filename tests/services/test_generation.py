@@ -15,7 +15,7 @@ def _taste_artist(name, mbid, playcount=100):
     return MagicMock(
         artist_name=name,
         artist_mbid=uuid.UUID(mbid) if mbid else None,
-        playcount=playcount,
+        count=playcount,
     )
 
 
@@ -139,17 +139,17 @@ class TestGenerate:
                 {
                     "artist_name": "Yo La Tengo",
                     "artist_mbid": SEED1_MBID,
-                    "playcount": 500,
+                    "count": 500,
                 },
                 {
                     "artist_name": "The Notwist",
                     "artist_mbid": SEED2_MBID,
-                    "playcount": 300,
+                    "count": 300,
                 },
                 {
                     "artist_name": "Deerhunter",
                     "artist_mbid": SEED3_MBID,
-                    "playcount": 200,
+                    "count": 200,
                 },
             ]
             result = service.generate(
@@ -205,8 +205,8 @@ class TestGenerate:
 
         with patch("app.services.generation.select_seeds") as mock_select:
             mock_select.return_value = [
-                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "playcount": 500},
-                {"artist_name": "Seed2", "artist_mbid": SEED2_MBID, "playcount": 300},
+                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "count": 500},
+                {"artist_name": "Seed2", "artist_mbid": SEED2_MBID, "count": 300},
             ]
             result = service.generate(
                 mb_session=mock_mb,
@@ -253,7 +253,7 @@ class TestGenerate:
 
         with patch("app.services.generation.select_seeds") as mock_select:
             mock_select.return_value = [
-                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "playcount": 500},
+                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "count": 500},
             ]
             result = service.generate(
                 mb_session=mock_mb,
@@ -306,8 +306,8 @@ class TestGenerate:
 
         with patch("app.services.generation.select_seeds") as mock_select:
             mock_select.return_value = [
-                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "playcount": 500},
-                {"artist_name": "Seed2", "artist_mbid": SEED2_MBID, "playcount": 300},
+                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "count": 500},
+                {"artist_name": "Seed2", "artist_mbid": SEED2_MBID, "count": 300},
             ]
             result = service.generate(
                 mb_session=mock_mb,
@@ -362,7 +362,7 @@ class TestGenerate:
 
         with patch("app.services.generation.select_seeds") as mock_select:
             mock_select.return_value = [
-                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "playcount": 500},
+                {"artist_name": "Seed1", "artist_mbid": SEED1_MBID, "count": 500},
             ]
             service.generate(
                 mb_session=mock_mb,

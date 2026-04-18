@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
     "alembic",
+    "authlib>=1.7.0",
     "fastapi",
     "httpx",
     "psycopg[binary]",
@@ -19,6 +20,7 @@ dev = [
     "pre-commit",
     "pyright[nodejs]",
     "pytest",
+    "respx>=0.23.1",
     "ruff",
 ]
 

@@ -48,6 +48,27 @@ class LastfmProfile(Base):
     )
 
 
+class DiscogsProfile(Base):
+    __tablename__ = "discogs_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), unique=True, nullable=False
+    )
+    discogs_username: Mapped[str | None] = mapped_column(String(255))
+    request_token: Mapped[str | None] = mapped_column(String(255))
+    request_token_secret: Mapped[str | None] = mapped_column(String(255))
+    access_token: Mapped[str | None] = mapped_column(String(255))
+    access_token_secret: Mapped[str | None] = mapped_column(String(255))
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class TasteProfileArtist(Base):
     __tablename__ = "taste_profile_artists"
     __table_args__ = (UniqueConstraint("user_id", "source", "period", "artist_name"),)
@@ -60,7 +81,7 @@ class TasteProfileArtist(Base):
     period: Mapped[str] = mapped_column(String(20), nullable=False)
     artist_name: Mapped[str] = mapped_column(String(512), nullable=False)
     artist_mbid: Mapped[uuid.UUID | None] = mapped_column()
-    playcount: Mapped[int] = mapped_column(Integer, nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -73,7 +94,14 @@ class TasteProfileArtist(Base):
 class TasteProfileAlbum(Base):
     __tablename__ = "taste_profile_albums"
     __table_args__ = (
-        UniqueConstraint("user_id", "source", "period", "album_name", "artist_name"),
+        UniqueConstraint(
+            "user_id",
+            "source",
+            "period",
+            "album_name",
+            "artist_name",
+            "release_type",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -86,7 +114,10 @@ class TasteProfileAlbum(Base):
     album_mbid: Mapped[uuid.UUID | None] = mapped_column()
     artist_name: Mapped[str] = mapped_column(String(512), nullable=False)
     artist_mbid: Mapped[uuid.UUID | None] = mapped_column()
-    playcount: Mapped[int] = mapped_column(Integer, nullable=False)
+    release_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="album"
+    )
+    count: Mapped[int] = mapped_column(Integer, nullable=False)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

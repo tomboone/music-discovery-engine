@@ -19,8 +19,15 @@ def mock_repo():
 
 
 @pytest.fixture
-def service(mock_client, mock_repo):
-    return LastfmService(client=mock_client, repository=mock_repo)
+def mock_ingester():
+    return MagicMock()
+
+
+@pytest.fixture
+def service(mock_client, mock_repo, mock_ingester):
+    return LastfmService(
+        client=mock_client, repository=mock_repo, ingester=mock_ingester
+    )
 
 
 class TestCompleteAuth:
@@ -52,7 +59,9 @@ class TestCompleteAuth:
 
 
 class TestSyncTasteProfile:
-    def test_fetches_and_upserts_data(self, service, mock_client, mock_repo):
+    def test_calls_ingester_and_updates_synced_at(
+        self, service, mock_client, mock_repo, mock_ingester
+    ):
         user_id = uuid.uuid4()
         profile = LastfmProfile(
             id=uuid.uuid4(),
@@ -61,33 +70,25 @@ class TestSyncTasteProfile:
             session_key="key",
         )
         mock_repo.get_lastfm_profile.return_value = profile
-        mock_client.get_top_artists.return_value = [
-            {"name": "Artist1", "mbid": "", "playcount": "100", "@attr": {"rank": "1"}}
-        ]
-        mock_client.get_top_albums.return_value = [
-            {
-                "name": "Album1",
-                "mbid": "",
-                "playcount": "50",
-                "artist": {"name": "Artist1", "mbid": ""},
-                "@attr": {"rank": "1"},
-            }
-        ]
+        mock_ingester.ingest.return_value = {
+            "source": "lastfm",
+            "artists_count": 1,
+            "albums_count": 1,
+        }
         session = MagicMock()
 
         result = service.sync_taste_profile(session, user_id)
 
-        mock_client.get_top_artists.assert_called_once_with(
-            "testuser", period="overall"
-        )
-        mock_client.get_top_albums.assert_called_once_with("testuser", period="overall")
-        mock_repo.upsert_top_artists.assert_called_once()
-        mock_repo.upsert_top_albums.assert_called_once()
+        mock_ingester.ingest.assert_called_once()
         assert result["artists_count"] == 1
         assert result["albums_count"] == 1
+        assert "synced_at" in result
+        assert profile.last_synced_at is not None
 
-    def test_raises_when_no_profile(self, service, mock_repo):
-        mock_repo.get_lastfm_profile.return_value = None
+    def test_raises_when_no_profile(self, service, mock_repo, mock_ingester):
+        # LastfmSource.fetch raises ValueError when profile is missing; the
+        # ingester bubbles that up unchanged.
+        mock_ingester.ingest.side_effect = ValueError("Last.fm account not linked")
         session = MagicMock()
 
         with pytest.raises(ValueError, match="Last.fm account not linked"):

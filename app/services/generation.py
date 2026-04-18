@@ -32,7 +32,7 @@ class GenerationService:
             app_session.execute(
                 select(TasteProfileArtist)
                 .where(TasteProfileArtist.user_id == user_id)
-                .order_by(TasteProfileArtist.playcount.desc())
+                .order_by(TasteProfileArtist.count.desc())
             )
             .scalars()
             .all()
@@ -46,7 +46,7 @@ class GenerationService:
             {
                 "artist_name": row.artist_name,
                 "artist_mbid": str(row.artist_mbid) if row.artist_mbid else None,
-                "playcount": row.playcount,
+                "count": row.count,
             }
             for row in taste_rows
         ]

@@ -46,7 +46,7 @@ def test_taste_profile_artist_table_schema():
         "period",
         "artist_name",
         "artist_mbid",
-        "playcount",
+        "count",
         "rank",
         "created_at",
         "updated_at",
@@ -66,7 +66,8 @@ def test_taste_profile_album_table_schema():
         "album_mbid",
         "artist_name",
         "artist_mbid",
-        "playcount",
+        "release_type",
+        "count",
         "rank",
         "created_at",
         "updated_at",
@@ -106,7 +107,7 @@ def test_taste_profile_artist_creation():
             period="overall",
             artist_name="Yo La Tengo",
             artist_mbid=uuid.UUID("3121f5a6-0854-4a15-a3f3-4bd359073857"),
-            playcount=500,
+            count=500,
             rank=1,
         )
         session.add(artist)
@@ -114,7 +115,7 @@ def test_taste_profile_artist_creation():
         result = session.get(TasteProfileArtist, artist.id)
         assert result is not None
         assert result.artist_name == "Yo La Tengo"
-        assert result.playcount == 500
+        assert result.count == 500
 
 
 def test_taste_profile_album_creation():
@@ -132,7 +133,7 @@ def test_taste_profile_album_creation():
             album_mbid=uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
             artist_name="Yo La Tengo",
             artist_mbid=uuid.UUID("3121f5a6-0854-4a15-a3f3-4bd359073857"),
-            playcount=200,
+            count=200,
             rank=1,
         )
         session.add(album)
@@ -197,159 +198,3 @@ class TestGetLastfmProfile:
         repo = LastfmRepository()
         result = repo.get_lastfm_profile(repo_session, seed_user.id)
         assert result is None
-
-
-class TestUpsertTopArtists:
-    def test_inserts_artists(self, repo_session, seed_user):
-        repo = LastfmRepository()
-        artists = [
-            {
-                "name": "Yo La Tengo",
-                "mbid": "3121f5a6-0854-4a15-a3f3-4bd359073857",
-                "playcount": "500",
-                "@attr": {"rank": "1"},
-            },
-            {
-                "name": "Sonic Youth",
-                "mbid": "",
-                "playcount": "300",
-                "@attr": {"rank": "2"},
-            },
-        ]
-        repo.upsert_top_artists(
-            repo_session, seed_user.id, "lastfm", "overall", artists
-        )
-        results = (
-            repo_session.query(TasteProfileArtist).filter_by(user_id=seed_user.id).all()
-        )
-        assert len(results) == 2
-        assert results[0].artist_name == "Yo La Tengo"
-        assert results[1].artist_mbid is None  # empty string -> None
-
-    def test_updates_playcount_on_resync(self, repo_session, seed_user):
-        repo = LastfmRepository()
-        artists_v1 = [
-            {
-                "name": "Yo La Tengo",
-                "mbid": "",
-                "playcount": "500",
-                "@attr": {"rank": "1"},
-            },
-        ]
-        repo.upsert_top_artists(
-            repo_session, seed_user.id, "lastfm", "overall", artists_v1
-        )
-        artists_v2 = [
-            {
-                "name": "Yo La Tengo",
-                "mbid": "",
-                "playcount": "600",
-                "@attr": {"rank": "1"},
-            },
-        ]
-        repo.upsert_top_artists(
-            repo_session, seed_user.id, "lastfm", "overall", artists_v2
-        )
-        results = (
-            repo_session.query(TasteProfileArtist).filter_by(user_id=seed_user.id).all()
-        )
-        assert len(results) == 1
-        assert results[0].playcount == 600
-
-    def test_deletes_stale_artists(self, repo_session, seed_user):
-        repo = LastfmRepository()
-        artists_v1 = [
-            {
-                "name": "Yo La Tengo",
-                "mbid": "",
-                "playcount": "500",
-                "@attr": {"rank": "1"},
-            },
-            {
-                "name": "Sonic Youth",
-                "mbid": "",
-                "playcount": "300",
-                "@attr": {"rank": "2"},
-            },
-        ]
-        repo.upsert_top_artists(
-            repo_session, seed_user.id, "lastfm", "overall", artists_v1
-        )
-        artists_v2 = [
-            {
-                "name": "Yo La Tengo",
-                "mbid": "",
-                "playcount": "600",
-                "@attr": {"rank": "1"},
-            },
-        ]
-        repo.upsert_top_artists(
-            repo_session, seed_user.id, "lastfm", "overall", artists_v2
-        )
-        results = (
-            repo_session.query(TasteProfileArtist).filter_by(user_id=seed_user.id).all()
-        )
-        assert len(results) == 1
-        assert results[0].artist_name == "Yo La Tengo"
-
-
-class TestUpsertTopAlbums:
-    def test_inserts_albums(self, repo_session, seed_user):
-        repo = LastfmRepository()
-        albums = [
-            {
-                "name": "I Can Hear the Heart Beating as One",
-                "mbid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                "playcount": "200",
-                "artist": {
-                    "name": "Yo La Tengo",
-                    "mbid": "3121f5a6-0854-4a15-a3f3-4bd359073857",
-                },
-                "@attr": {"rank": "1"},
-            }
-        ]
-        repo.upsert_top_albums(repo_session, seed_user.id, "lastfm", "overall", albums)
-        results = (
-            repo_session.query(TasteProfileAlbum).filter_by(user_id=seed_user.id).all()
-        )
-        assert len(results) == 1
-        assert results[0].album_name == "I Can Hear the Heart Beating as One"
-        assert results[0].artist_name == "Yo La Tengo"
-
-    def test_deletes_stale_albums(self, repo_session, seed_user):
-        repo = LastfmRepository()
-        albums_v1 = [
-            {
-                "name": "Album1",
-                "mbid": "",
-                "playcount": "100",
-                "artist": {"name": "A1", "mbid": ""},
-                "@attr": {"rank": "1"},
-            },
-            {
-                "name": "Album2",
-                "mbid": "",
-                "playcount": "50",
-                "artist": {"name": "A2", "mbid": ""},
-                "@attr": {"rank": "2"},
-            },
-        ]
-        repo.upsert_top_albums(
-            repo_session, seed_user.id, "lastfm", "overall", albums_v1
-        )
-        albums_v2 = [
-            {
-                "name": "Album1",
-                "mbid": "",
-                "playcount": "150",
-                "artist": {"name": "A1", "mbid": ""},
-                "@attr": {"rank": "1"},
-            },
-        ]
-        repo.upsert_top_albums(
-            repo_session, seed_user.id, "lastfm", "overall", albums_v2
-        )
-        results = (
-            repo_session.query(TasteProfileAlbum).filter_by(user_id=seed_user.id).all()
-        )
-        assert len(results) == 1

@@ -39,3 +39,17 @@ def test_lastfm_settings_from_env(monkeypatch):
     assert settings.lastfm_api_key == "test_key_123"
     assert settings.lastfm_shared_secret == "test_secret_456"
     assert settings.lastfm_callback_url == "http://localhost/callback"
+
+
+def test_settings_have_discogs_fields():
+    from app.config import Settings
+
+    settings = Settings()
+    assert hasattr(settings, "discogs_consumer_key")
+    assert hasattr(settings, "discogs_consumer_secret")
+    assert hasattr(settings, "discogs_callback_url")
+    assert hasattr(settings, "discogs_user_agent")
+    assert settings.discogs_callback_url == (
+        "https://music-discovery-api.localhost/auth/discogs/callback"
+    )
+    assert settings.discogs_user_agent.startswith("MusicDiscoveryEngine/")

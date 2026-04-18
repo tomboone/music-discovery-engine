@@ -4,6 +4,10 @@
 
 Personalized music discovery platform that finds recommendations through meaningful connections (shared producers, session musicians, label relationships) rather than similarity-based algorithms. Two deliverables: weekly recommendation email and web-based knowledge graph explorer.
 
+## Required Reading
+
+Before working on recommendation logic, graph traversal queries, or data-source integration, read `docs/music-discovery-project-context.md`. It contains the core algorithm (multi-path intersection), signal quality by connection type, traversal depth findings, validated MusicBrainz SQL patterns, key tables, and data-source licensing constraints (Last.fm commercial use, Spotify/Bandcamp limits).
+
 ## Tech Stack
 
 - **Backend**: FastAPI (Python 3.14)

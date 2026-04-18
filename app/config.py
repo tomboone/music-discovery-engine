@@ -15,3 +15,11 @@ class Settings(BaseSettings):
     lastfm_callback_url: str = (
         "https://music-discovery-api.localhost/auth/lastfm/callback"
     )
+    discogs_consumer_key: str = ""
+    discogs_consumer_secret: str = ""
+    discogs_callback_url: str = (
+        "https://music-discovery-api.localhost/auth/discogs/callback"
+    )
+    discogs_user_agent: str = (
+        "MusicDiscoveryEngine/0.1 +https://music-discovery-api.localhost"
+    )

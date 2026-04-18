@@ -22,7 +22,7 @@ def select_seeds(
     if len(eligible) <= num_seeds:
         return list(eligible)
 
-    weights = [a.get("playcount", 1) for a in eligible]
+    weights = [a.get("count", 1) for a in eligible]
     selected: list[dict] = []
     remaining = list(eligible)
     remaining_weights = list(weights)

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from app.clients.discogs import DiscogsClient
 from app.clients.lastfm import LastfmClient
 from app.config import Settings
 from app.database import (
@@ -15,15 +16,19 @@ from app.database import (
     get_mb_session,
 )
 from app.models.musicbrainz import reflect_mb_tables
+from app.repositories.discogs import DiscogsRepository
 from app.repositories.generation import GenerationRepository
 from app.repositories.lastfm import LastfmRepository
 from app.repositories.recommendations import RecommendationRepository
+from app.routers.discogs import create_discogs_router
 from app.routers.generation import create_generation_router
 from app.routers.lastfm import create_lastfm_router
 from app.routers.recommendations import create_recommendations_router
+from app.services.discogs import DiscogsService
 from app.services.generation import GenerationService
 from app.services.lastfm import LastfmService
 from app.services.recommendations import RecommendationService
+from app.services.taste_profile.ingester import TasteProfileIngester
 
 SEED_USER_ID = uuid.UUID("d4e5f6a7-b8c9-4d0e-a1f2-b3c4d5e6f7a8")
 
@@ -55,7 +60,10 @@ lastfm_client = LastfmClient(
     callback_url=settings.lastfm_callback_url,
 )
 lastfm_repo = LastfmRepository()
-lastfm_service = LastfmService(client=lastfm_client, repository=lastfm_repo)
+taste_profile_ingester = TasteProfileIngester()
+lastfm_service = LastfmService(
+    client=lastfm_client, repository=lastfm_repo, ingester=taste_profile_ingester
+)
 
 
 def _get_app_session():
@@ -67,6 +75,23 @@ app.include_router(
     create_lastfm_router(
         lastfm_service, lastfm_client, SEED_USER_ID, get_session=_get_app_session
     )
+)
+
+# Discogs integration
+discogs_client = DiscogsClient(
+    consumer_key=settings.discogs_consumer_key,
+    consumer_secret=settings.discogs_consumer_secret,
+    callback_url=settings.discogs_callback_url,
+    user_agent=settings.discogs_user_agent,
+)
+discogs_repo = DiscogsRepository()
+discogs_service = DiscogsService(
+    client=discogs_client,
+    repository=discogs_repo,
+    ingester=taste_profile_ingester,
+)
+app.include_router(
+    create_discogs_router(discogs_service, SEED_USER_ID, _get_app_session)
 )
 
 # Recommendations
