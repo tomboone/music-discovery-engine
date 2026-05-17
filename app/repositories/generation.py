@@ -19,7 +19,7 @@ class GenerationRepository:
             if mbid and isinstance(mbid, str):
                 try:
                     mbid = uuid.UUID(mbid)
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     mbid = None
             elif not mbid:
                 mbid = None
@@ -28,7 +28,7 @@ class GenerationRepository:
             if seed_mbid and isinstance(seed_mbid, str):
                 try:
                     seed_mbid = uuid.UUID(seed_mbid)
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     seed_mbid = None
             elif not seed_mbid:
                 seed_mbid = None

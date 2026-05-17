@@ -68,25 +68,6 @@ def compute_genre_affinity(
     return shared_weight / seed_total
 
 
-def compute_collaborator_diversity(
-    paths: list[dict],
-    max_artist_count: int,
-) -> float:
-    if not paths or max_artist_count <= 1:
-        return 0.0
-    log_max = math.log(max_artist_count)
-    if log_max == 0:
-        return 0.0
-    scores = []
-    for p in paths:
-        count = p.get("collaborator_artist_count", 1)
-        if count <= 1:
-            scores.append(0.0)
-        else:
-            scores.append(math.log(count) / log_max)
-    return sum(scores) / len(scores)
-
-
 def compute_obscurity(listeners: int, max_listeners: int) -> float:
     """Score from 0.0 (very popular) to 1.0 (very obscure).
     Uses inverse log scale so the penalty is steep for mega-stars
@@ -102,13 +83,13 @@ def compute_obscurity(listeners: int, max_listeners: int) -> float:
 def compute_final_score(
     path_count: int,
     genre_affinity: float,
-    collaborator_diversity: float,
+    bridge_score: float,
     obscurity: float,
     weights: dict[str, float],
 ) -> float:
     return (
         path_count * weights.get("path_count", 1.0)
         + genre_affinity * weights.get("genre_affinity", 0.5)
-        + collaborator_diversity * weights.get("collaborator_diversity", 0.3)
+        + bridge_score * weights.get("bridge_score", 1.0)
         + obscurity * weights.get("obscurity", 0.5)
     )

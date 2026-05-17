@@ -8,7 +8,7 @@ from app.clients.lastfm import LastfmClient
 from app.models.app import ArtistListenerCache, TasteProfileArtist
 from app.repositories.recommendations import RecommendationRepository
 from app.services.scoring import (
-    compute_collaborator_diversity,
+    aggregate_bridge_score,
     compute_final_score,
     compute_genre_affinity,
     compute_obscurity,
@@ -18,7 +18,7 @@ DEFAULT_RELATIONSHIP_TYPES = ["producer", "instrument", "performer", "vocal"]
 DEFAULT_WEIGHTS = {
     "path_count": 1.0,
     "genre_affinity": 0.5,
-    "collaborator_diversity": 0.3,
+    "bridge_score": 1.0,
     "obscurity": 0.5,
 }
 DEFAULT_MAX_LISTENERS = 2_000_000
@@ -40,7 +40,7 @@ class RecommendationService:
         seed_mbid: uuid.UUID,
         user_id: uuid.UUID,
         relationship_types: list[str] | None = None,
-        min_paths: int = 2,
+        min_paths: int = 1,
         limit: int = 20,
         weights: dict[str, float] | None = None,
         min_graph_results: int = 5,
@@ -60,7 +60,7 @@ class RecommendationService:
             seed_mbid=seed_mbid,
             relationship_types=relationship_types,
             min_paths=min_paths,
-            limit=limit + 50,
+            limit=limit * 10,
         )
 
         # Filter out obviously related artists (band members, alter egos, etc.)
@@ -74,14 +74,6 @@ class RecommendationService:
         all_mbids = [str(seed_mbid)] + candidate_mbids
         all_tags = self._repository.get_artist_tags(mb_session, all_mbids)
         seed_tags = all_tags.get(str(seed_mbid), {})
-
-        # Find max collaborator_artist_count for normalization
-        max_collab_count = 1
-        for r in raw_results:
-            for p in r.get("paths", []):
-                count = p.get("collaborator_artist_count", 1)
-                if count > max_collab_count:
-                    max_collab_count = count
 
         # Fetch listener counts — check cache first, then Last.fm API
         listener_counts: dict[str, int] = {}
@@ -143,19 +135,17 @@ class RecommendationService:
         for r in raw_results:
             candidate_tags = all_tags.get(r["artist_mbid"], {})
             genre_aff = compute_genre_affinity(seed_tags, candidate_tags)
-            collab_div = compute_collaborator_diversity(
-                r.get("paths", []), max_collab_count
-            )
+            bridge = aggregate_bridge_score(r.get("paths", []))
             listeners = listener_counts.get(r["artist_name"], 0)
             obscurity = compute_obscurity(listeners, max_listeners)
             final = compute_final_score(
-                r["path_count"], genre_aff, collab_div, obscurity, weights
+                r["path_count"], genre_aff, bridge, obscurity, weights
             )
             scored.append(
                 {
                     **r,
                     "genre_affinity": genre_aff,
-                    "collaborator_diversity": collab_div,
+                    "bridge_score": bridge,
                     "obscurity": obscurity,
                     "listeners": listeners,
                     "final_score": final,
@@ -182,7 +172,7 @@ class RecommendationService:
         for r in scored:
             try:
                 result_mbid = uuid.UUID(r["artist_mbid"])
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
             if result_mbid in known_mbids:
                 filtered_count += 1
@@ -200,7 +190,7 @@ class RecommendationService:
                     "score": {
                         "path_count": r["path_count"],
                         "genre_affinity": round(r["genre_affinity"], 4),
-                        "collaborator_diversity": round(r["collaborator_diversity"], 4),
+                        "bridge_score": round(r["bridge_score"], 4),
                         "obscurity": round(r["obscurity"], 4),
                         "listeners": r["listeners"],
                         "final_score": round(r["final_score"], 4),
@@ -231,7 +221,7 @@ class RecommendationService:
                         s_mbid = uuid.UUID(s["mbid"])
                         if s_mbid in known_mbids:
                             continue
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         pass
                 # Filter duplicates with graph results by name
                 if s["name"] in graph_names:

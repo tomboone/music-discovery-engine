@@ -4,7 +4,6 @@ from app.services.scoring import (
     DEFAULT_BRIDGE_SWEET_SPOTS,
     aggregate_bridge_score,
     compute_bridge_score,
-    compute_collaborator_diversity,
     compute_final_score,
     compute_genre_affinity,
     compute_obscurity,
@@ -49,46 +48,6 @@ class TestComputeGenreAffinity:
         assert result == pytest.approx(3 / 10)
 
 
-class TestComputeCollaboratorDiversity:
-    def test_high_diversity(self):
-        paths = [
-            {"collaborator_artist_count": 30},
-            {"collaborator_artist_count": 25},
-        ]
-        result = compute_collaborator_diversity(paths, max_artist_count=30)
-        assert 0.0 < result <= 1.0
-
-    def test_low_diversity(self):
-        paths = [
-            {"collaborator_artist_count": 2},
-        ]
-        result = compute_collaborator_diversity(paths, max_artist_count=30)
-        assert 0.0 < result < 0.5
-
-    def test_high_beats_low(self):
-        high = compute_collaborator_diversity(
-            [{"collaborator_artist_count": 30}], max_artist_count=30
-        )
-        low = compute_collaborator_diversity(
-            [{"collaborator_artist_count": 2}], max_artist_count=30
-        )
-        assert high > low
-
-    def test_empty_paths(self):
-        result = compute_collaborator_diversity([], max_artist_count=30)
-        assert result == pytest.approx(0.0)
-
-    def test_max_artist_count_zero(self):
-        paths = [{"collaborator_artist_count": 5}]
-        result = compute_collaborator_diversity(paths, max_artist_count=0)
-        assert result == pytest.approx(0.0)
-
-    def test_collaborator_count_one(self):
-        paths = [{"collaborator_artist_count": 1}]
-        result = compute_collaborator_diversity(paths, max_artist_count=30)
-        assert result == pytest.approx(0.0)
-
-
 class TestComputeObscurity:
     def test_very_popular_is_low(self):
         result = compute_obscurity(5_000_000, max_listeners=2_000_000)
@@ -121,28 +80,28 @@ class TestComputeFinalScore:
         result = compute_final_score(
             path_count=3,
             genre_affinity=0.5,
-            collaborator_diversity=0.4,
+            bridge_score=0.4,
             obscurity=0.6,
             weights={
                 "path_count": 1.0,
                 "genre_affinity": 0.5,
-                "collaborator_diversity": 0.3,
+                "bridge_score": 1.0,
                 "obscurity": 0.5,
             },
         )
-        expected = 3 * 1.0 + 0.5 * 0.5 + 0.4 * 0.3 + 0.6 * 0.5
+        expected = 3 * 1.0 + 0.5 * 0.5 + 0.4 * 1.0 + 0.6 * 0.5
         assert result == pytest.approx(expected)
 
     def test_zero_weights(self):
         result = compute_final_score(
             path_count=3,
             genre_affinity=0.8,
-            collaborator_diversity=0.6,
+            bridge_score=0.6,
             obscurity=0.5,
             weights={
                 "path_count": 0.0,
                 "genre_affinity": 0.0,
-                "collaborator_diversity": 0.0,
+                "bridge_score": 0.0,
                 "obscurity": 0.0,
             },
         )
@@ -152,16 +111,42 @@ class TestComputeFinalScore:
         result = compute_final_score(
             path_count=2,
             genre_affinity=0.9,
-            collaborator_diversity=0.8,
+            bridge_score=0.8,
             obscurity=0.7,
             weights={
                 "path_count": 1.0,
                 "genre_affinity": 0.0,
-                "collaborator_diversity": 0.0,
+                "bridge_score": 0.0,
                 "obscurity": 0.0,
             },
         )
         assert result == pytest.approx(2.0)
+
+    def test_great_bridge_competes_with_extra_path(self):
+        """A single-path candidate with a perfect bridge should score
+        competitively with a two-path candidate with a weak bridge."""
+        weights = {
+            "path_count": 1.0,
+            "genre_affinity": 0.0,
+            "bridge_score": 1.0,
+            "obscurity": 0.0,
+        }
+        single_path_great_bridge = compute_final_score(
+            path_count=1,
+            genre_affinity=0,
+            bridge_score=1.0,
+            obscurity=0,
+            weights=weights,
+        )
+        two_path_weak_bridge = compute_final_score(
+            path_count=2,
+            genre_affinity=0,
+            bridge_score=0.1,
+            obscurity=0,
+            weights=weights,
+        )
+        # 1 + 1.0 = 2.0  vs  2 + 0.1 = 2.1 — close, two-path still edges out
+        assert abs(single_path_great_bridge - two_path_weak_bridge) < 0.5
 
 
 class TestComputeBridgeScore:

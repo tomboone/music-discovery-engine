@@ -64,7 +64,7 @@ class GenerationService:
                     seed_mbid=uuid.UUID(seed["artist_mbid"]),
                     user_id=user_id,
                 )
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
 
             if result is None:

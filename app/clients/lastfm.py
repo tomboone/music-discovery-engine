@@ -145,5 +145,5 @@ class LastfmClient:
         try:
             data = self._request({"method": "artist.getInfo", "artist": artist_name})
             return int(data["artist"]["stats"]["listeners"])
-        except (LastfmApiError, KeyError, ValueError):
+        except LastfmApiError, KeyError, ValueError:
             return 0

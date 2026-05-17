@@ -162,7 +162,7 @@ class TestGetRecommendations:
         assert "score" in rec
         assert "path_count" in rec["score"]
         assert "genre_affinity" in rec["score"]
-        assert "collaborator_diversity" in rec["score"]
+        assert "bridge_score" in rec["score"]
         assert "final_score" in rec["score"]
 
     def test_sorted_by_final_score(self, service, mock_repo):
@@ -248,6 +248,47 @@ class TestGetRecommendations:
         mbids = call_args[0][1]
         assert str(SEED_MBID) in mbids
         assert str(UNKNOWN_MBID) in mbids
+
+    def test_default_min_paths_is_one(self, service, mock_repo):
+        """Service default should now allow single-path candidates."""
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = []
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        service.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+        )
+
+        call_kwargs = mock_repo.find_multi_path_artists.call_args.kwargs
+        assert call_kwargs["min_paths"] == 1
+
+    def test_default_candidate_limit_is_ten_times(self, service, mock_repo):
+        """Candidate pre-cap should be limit * 10 (was limit + 50)."""
+        mock_repo.get_artist_by_mbid.return_value = {
+            "name": "Seed",
+            "mbid": str(SEED_MBID),
+        }
+        mock_repo.find_multi_path_artists.return_value = []
+        mock_app = MagicMock()
+        mock_app.execute.return_value.scalars.return_value.all.return_value = []
+
+        service.get_recommendations(
+            mb_session=MagicMock(),
+            app_session=mock_app,
+            seed_mbid=SEED_MBID,
+            user_id=USER_ID,
+            limit=20,
+        )
+
+        call_kwargs = mock_repo.find_multi_path_artists.call_args.kwargs
+        assert call_kwargs["limit"] == 200
 
 
 class TestFallbackRecommendations:
