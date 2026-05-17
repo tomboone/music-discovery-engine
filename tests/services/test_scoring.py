@@ -2,6 +2,7 @@ import pytest
 
 from app.services.scoring import (
     DEFAULT_BRIDGE_SWEET_SPOTS,
+    aggregate_bridge_score,
     compute_bridge_score,
     compute_collaborator_diversity,
     compute_final_score,
@@ -228,3 +229,37 @@ class TestComputeBridgeScore:
         assert DEFAULT_BRIDGE_SWEET_SPOTS["performer"] == 150
         assert DEFAULT_BRIDGE_SWEET_SPOTS["vocal"] == 100
         assert DEFAULT_BRIDGE_SWEET_SPOTS["_default"] == 100
+
+
+class TestAggregateBridgeScore:
+    def test_empty_paths_returns_zero(self):
+        assert aggregate_bridge_score([]) == pytest.approx(0.0)
+
+    def test_single_perfect_path(self):
+        paths = [
+            {"relationship_type": "producer", "collaborator_artist_count": 50},
+        ]
+        assert aggregate_bridge_score(paths) == pytest.approx(1.0)
+
+    def test_mean_across_paths(self):
+        # Two paths, one perfect (producer at 50) and one with count=1 (zero)
+        paths = [
+            {"relationship_type": "producer", "collaborator_artist_count": 50},
+            {"relationship_type": "instrument", "collaborator_artist_count": 1},
+        ]
+        result = aggregate_bridge_score(paths)
+        assert result == pytest.approx(0.5)
+
+    def test_missing_relationship_type_uses_default(self):
+        paths = [{"collaborator_artist_count": 100}]
+        # _default sweet spot is 100, so a count of 100 should peak
+        assert aggregate_bridge_score(paths) == pytest.approx(1.0)
+
+    def test_missing_count_treated_as_one(self):
+        paths = [{"relationship_type": "producer"}]
+        assert aggregate_bridge_score(paths) == pytest.approx(0.0)
+
+    def test_custom_sweet_spots_passed_through(self):
+        paths = [{"relationship_type": "producer", "collaborator_artist_count": 10}]
+        custom = {"_default": 10, "producer": 10}
+        assert aggregate_bridge_score(paths, sweet_spots=custom) == pytest.approx(1.0)

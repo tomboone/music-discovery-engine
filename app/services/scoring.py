@@ -31,6 +31,26 @@ def compute_bridge_score(
     return math.exp(-(distance**2) / (2 * falloff**2))
 
 
+def aggregate_bridge_score(
+    paths: list[dict],
+    sweet_spots: dict[str, int] | None = None,
+    falloff: float = DEFAULT_BRIDGE_FALLOFF,
+) -> float:
+    """Mean bridge score across all paths for a candidate."""
+    if not paths:
+        return 0.0
+    scores = [
+        compute_bridge_score(
+            p.get("collaborator_artist_count", 1),
+            p.get("relationship_type", "_default"),
+            sweet_spots=sweet_spots,
+            falloff=falloff,
+        )
+        for p in paths
+    ]
+    return sum(scores) / len(scores)
+
+
 def compute_genre_affinity(
     seed_tags: dict[str, int],
     candidate_tags: dict[str, int],
