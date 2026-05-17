@@ -128,7 +128,7 @@ class TestGetRecommendations:
                 "weights": {
                     "path_count": 2.0,
                     "genre_affinity": 1.0,
-                    "collaborator_diversity": 0.0,
+                    "bridge_score": 0.0,
                 },
             },
             "filtered_known_artists": 0,
@@ -137,13 +137,13 @@ class TestGetRecommendations:
             f"/recommendations?seed_mbid={SEED_MBID}"
             "&weight_path_count=2.0"
             "&weight_genre_affinity=1.0"
-            "&weight_collaborator_diversity=0.0"
+            "&weight_bridge_score=0.0"
         )
         assert response.status_code == 200
         call_kwargs = mock_service.get_recommendations.call_args
         assert call_kwargs.kwargs["weights"]["path_count"] == 2.0
         assert call_kwargs.kwargs["weights"]["genre_affinity"] == 1.0
-        assert call_kwargs.kwargs["weights"]["collaborator_diversity"] == 0.0
+        assert call_kwargs.kwargs["weights"]["bridge_score"] == 0.0
 
     def test_score_in_response(self, client, mock_service):
         mock_service.get_recommendations.return_value = {
@@ -156,7 +156,7 @@ class TestGetRecommendations:
                     "score": {
                         "path_count": 2,
                         "genre_affinity": 0.5,
-                        "collaborator_diversity": 0.3,
+                        "bridge_score": 0.3,
                         "final_score": 2.84,
                     },
                 }
@@ -168,7 +168,7 @@ class TestGetRecommendations:
                 "weights": {
                     "path_count": 1.0,
                     "genre_affinity": 0.5,
-                    "collaborator_diversity": 0.3,
+                    "bridge_score": 0.3,
                 },
             },
             "filtered_known_artists": 0,
@@ -198,7 +198,7 @@ class TestGetRecommendations:
                 "weights": {
                     "path_count": 1.0,
                     "genre_affinity": 0.5,
-                    "collaborator_diversity": 0.3,
+                    "bridge_score": 0.3,
                 },
                 "min_graph_results": 10,
             },

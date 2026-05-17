@@ -129,7 +129,7 @@ class TestGetRecommendations:
             weights={
                 "path_count": 2.0,
                 "genre_affinity": 1.0,
-                "collaborator_diversity": 0.0,
+                "bridge_score": 0.0,
             },
         )
 

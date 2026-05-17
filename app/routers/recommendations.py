@@ -47,11 +47,11 @@ def create_recommendations_router(
     async def get_recommendations(
         seed_mbid: uuid.UUID = Query(...),
         relationship_types: str = Query(default=DEFAULT_TYPES),
-        min_paths: int = Query(default=2, ge=1),
+        min_paths: int = Query(default=1, ge=1),
         limit: int = Query(default=20, ge=1, le=100),
         weight_path_count: float = Query(default=1.0, ge=0.0),
         weight_genre_affinity: float = Query(default=0.5, ge=0.0),
-        weight_collaborator_diversity: float = Query(default=0.3, ge=0.0),
+        weight_bridge_score: float = Query(default=1.0, ge=0.0),
         weight_obscurity: float = Query(default=0.5, ge=0.0),
         min_graph_results: int = Query(default=5, ge=0),
         max_listeners: int = Query(default=2_000_000, ge=0),
@@ -60,7 +60,7 @@ def create_recommendations_router(
         weights = {
             "path_count": weight_path_count,
             "genre_affinity": weight_genre_affinity,
-            "collaborator_diversity": weight_collaborator_diversity,
+            "bridge_score": weight_bridge_score,
             "obscurity": weight_obscurity,
         }
 

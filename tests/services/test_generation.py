@@ -33,7 +33,7 @@ def _graph_rec(name, mbid, score, seed_name, seed_mbid):
         "score": {
             "path_count": 2,
             "genre_affinity": 0.5,
-            "collaborator_diversity": 0.3,
+            "bridge_score": 0.3,
             "final_score": score,
         },
     }
