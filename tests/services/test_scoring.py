@@ -1,6 +1,8 @@
 import pytest
 
 from app.services.scoring import (
+    DEFAULT_BRIDGE_SWEET_SPOTS,
+    compute_bridge_score,
     compute_collaborator_diversity,
     compute_final_score,
     compute_genre_affinity,
@@ -159,3 +161,70 @@ class TestComputeFinalScore:
             },
         )
         assert result == pytest.approx(2.0)
+
+
+class TestComputeBridgeScore:
+    def test_count_one_returns_zero(self):
+        assert compute_bridge_score(1, "producer") == pytest.approx(0.0)
+
+    def test_count_zero_returns_zero(self):
+        assert compute_bridge_score(0, "producer") == pytest.approx(0.0)
+
+    def test_peaks_at_sweet_spot(self):
+        # Producer sweet spot is 50; score at 50 should be max (1.0)
+        at_peak = compute_bridge_score(50, "producer")
+        assert at_peak == pytest.approx(1.0)
+
+    def test_falls_off_above_sweet_spot(self):
+        # Greg Calbi case — promiscuous collaborator
+        at_peak = compute_bridge_score(50, "producer")
+        too_high = compute_bridge_score(5000, "producer")
+        assert too_high < at_peak
+        assert too_high < 0.5
+
+    def test_falls_off_below_sweet_spot(self):
+        # Tiny scene collaborator
+        at_peak = compute_bridge_score(50, "producer")
+        too_low = compute_bridge_score(3, "producer")
+        assert too_low < at_peak
+        assert too_low < 0.5
+
+    def test_per_relationship_sweet_spots_differ(self):
+        # Instrument sweet spot (150) is higher than producer (50)
+        # so 150 should score higher for instrument than for producer
+        instrument_score = compute_bridge_score(150, "instrument")
+        producer_score = compute_bridge_score(150, "producer")
+        assert instrument_score > producer_score
+        assert instrument_score == pytest.approx(1.0)
+
+    def test_unknown_relationship_uses_default(self):
+        # Unknown rel type should use _default sweet spot (100)
+        score = compute_bridge_score(100, "remixer")
+        assert score == pytest.approx(1.0)
+
+    def test_monotonic_increase_below_peak(self):
+        # On the rising side of the bell
+        a = compute_bridge_score(5, "producer")
+        b = compute_bridge_score(15, "producer")
+        c = compute_bridge_score(40, "producer")
+        assert a < b < c
+
+    def test_monotonic_decrease_above_peak(self):
+        # On the falling side of the bell (producer peak = 50)
+        a = compute_bridge_score(60, "producer")
+        b = compute_bridge_score(200, "producer")
+        c = compute_bridge_score(2000, "producer")
+        assert a > b > c
+
+    def test_custom_sweet_spots_override(self):
+        custom = {"_default": 10, "producer": 10}
+        peak = compute_bridge_score(10, "producer", sweet_spots=custom)
+        off = compute_bridge_score(50, "producer", sweet_spots=custom)
+        assert peak > off
+
+    def test_default_sweet_spots_constant_shape(self):
+        assert DEFAULT_BRIDGE_SWEET_SPOTS["producer"] == 50
+        assert DEFAULT_BRIDGE_SWEET_SPOTS["instrument"] == 150
+        assert DEFAULT_BRIDGE_SWEET_SPOTS["performer"] == 150
+        assert DEFAULT_BRIDGE_SWEET_SPOTS["vocal"] == 100
+        assert DEFAULT_BRIDGE_SWEET_SPOTS["_default"] == 100

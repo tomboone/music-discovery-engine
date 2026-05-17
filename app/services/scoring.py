@@ -1,5 +1,35 @@
 import math
 
+DEFAULT_BRIDGE_SWEET_SPOTS = {
+    "producer": 50,
+    "instrument": 150,
+    "performer": 150,
+    "vocal": 100,
+    "_default": 100,
+}
+DEFAULT_BRIDGE_FALLOFF = 1.5  # standard deviation in log-units
+
+
+def compute_bridge_score(
+    count: int,
+    relationship_type: str,
+    sweet_spots: dict[str, int] | None = None,
+    falloff: float = DEFAULT_BRIDGE_FALLOFF,
+) -> float:
+    """Score a single collaborator path by how well it bridges scenes.
+
+    Bell-shaped on log(collaborator_artist_count):
+      - count <= 1: 0.0 (no network)
+      - count ≈ sweet_spot[rel_type]: peaks at 1.0
+      - count >> sweet_spot: drops back toward 0.0 (promiscuous = low signal)
+    """
+    if count <= 1:
+        return 0.0
+    spots = sweet_spots or DEFAULT_BRIDGE_SWEET_SPOTS
+    target = spots.get(relationship_type, spots["_default"])
+    distance = abs(math.log(count) - math.log(target))
+    return math.exp(-(distance**2) / (2 * falloff**2))
+
 
 def compute_genre_affinity(
     seed_tags: dict[str, int],
