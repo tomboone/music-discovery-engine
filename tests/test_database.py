@@ -1,6 +1,5 @@
+import contextlib
 from unittest.mock import patch
-
-from sqlalchemy import text
 
 from app.database import (
     create_app_db,
@@ -27,10 +26,8 @@ def test_get_app_session(settings):
     session = next(gen)
     assert session is not None
     # cleanup
-    try:
+    with contextlib.suppress(StopIteration):
         next(gen)
-    except StopIteration:
-        pass
 
 
 def test_get_mb_session(settings):
@@ -38,15 +35,15 @@ def test_get_mb_session(settings):
     gen = get_mb_session(engine)
     session = next(gen)
     assert session is not None
-    try:
+    with contextlib.suppress(StopIteration):
         next(gen)
-    except StopIteration:
-        pass
 
 
 def test_create_app_db_runs_create_database(settings):
     with patch("app.database.create_engine") as mock_create_engine:
-        mock_conn = mock_create_engine.return_value.connect.return_value.__enter__.return_value
+        mock_conn = (
+            mock_create_engine.return_value.connect.return_value.__enter__.return_value
+        )
         mock_conn.execute.return_value.scalar.return_value = None
         create_app_db(settings)
         mock_create_engine.assert_called_once()

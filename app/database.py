@@ -19,7 +19,7 @@ def get_mb_engine(settings: Settings) -> Engine:
     )
 
 
-def get_app_session(engine: Engine) -> Generator[Session, None, None]:
+def get_app_session(engine: Engine) -> Generator[Session]:
     session_factory = sessionmaker(bind=engine)
     session = session_factory()
     try:
@@ -28,7 +28,7 @@ def get_app_session(engine: Engine) -> Generator[Session, None, None]:
         session.close()
 
 
-def get_mb_session(engine: Engine) -> Generator[Session, None, None]:
+def get_mb_session(engine: Engine) -> Generator[Session]:
     session_factory = sessionmaker(bind=engine)
     session = session_factory()
     try:

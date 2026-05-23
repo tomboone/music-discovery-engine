@@ -4,18 +4,46 @@ version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
     "alembic",
+    "authlib>=1.7.1",
     "fastapi",
     "httpx",
     "psycopg[binary]",
     "pydantic",
     "pydantic-settings",
+    "python-dotenv",
     "sqlalchemy",
     "uvicorn",
 ]
 
 [dependency-groups]
 dev = [
+    "pre-commit",
     "pyright[nodejs]",
     "pytest",
+    "respx>=0.23.1",
     "ruff",
 ]
+
+[tool.ruff]
+line-length = 88
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+]
+ignore = [
+    "B008",  # function call in default arg — required by FastAPI Query()
+]
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
